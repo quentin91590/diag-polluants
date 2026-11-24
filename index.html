@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4e4184">
+<title>Diagnostic polluants</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="js/vendor/qrcode.js" defer></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header class="bar" id="bar">
+  <button class="ic" id="back" type="button" aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <div class="bt"><b id="title">Diagnostic polluants</b><span id="subtitle">Prototype pour Novacity</span></div>
+  <span class="net" id="net" hidden>Hors ligne</span>
+</header>
+<main id="view" class="view"></main>
+<div class="sheet-bg" id="sheet-bg" hidden></div>
+<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></section>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="ar-ov" id="ar-ov" hidden>
+  <svg class="ar-svg" id="ar-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+  <div class="ar-dots" id="ar-dots"></div>
+  <div class="ar-ret" id="ar-ret"><i></i></div>
+  <div class="ar-top"><b id="ar-mode">Mesure</b><span id="ar-msg">Bougez doucement le téléphone pour détecter les surfaces.</span></div>
+  <div class="ar-read" id="ar-read"></div>
+  <div class="ar-bot">
+    <button type="button" class="ar-b" id="ar-cancel">Annuler</button>
+    <button type="button" class="ar-b" id="ar-undo">Retour</button>
+    <button type="button" class="ar-b pri" id="ar-pt">Point</button>
+    <button type="button" class="ar-b ok" id="ar-ok" disabled>Valider</button>
+  </div>
+</div>
+<noscript>Cette application a besoin de JavaScript.</noscript>
+</body>
+</html>
