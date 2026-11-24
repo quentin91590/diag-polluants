@@ -48,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.5';
+const APP_V = '1.6';
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const had = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
@@ -121,7 +121,7 @@ async function dash(id) {
   bind({
     lock: b => toast(`Validez d’abord le point de contrôle ${b.dataset.n}.`),
     exp: () => exportJson(m),
-    delm: async () => { if (await confirmSheet('Supprimer le mandat ?', 'Toutes ses données et photos seront effacées de cet appareil.', 'Supprimer', true)) { await S.remove(m.id); toast('Mandat supprimé'); go('#/'); } }
+    delm: async () => { if (await confirmSheet('Supprimer le mandat ?', 'Toutes ses données et photos seront effacées de cet appareil.', 'Supprimer', true)) { await S.remove(m.id); go('#/'); } }
   });
 }
 
@@ -163,16 +163,15 @@ async function prep(id) {
   bind({
     type: async b => { I.typeDiag = b.dataset.v; await save(m); refresh(); },
     canton: async b => { I.canton = Object.keys(CANTONS).find(k => CANTONS[k].n === b.dataset.v) || 'CH'; S.reopenFrom(m, 1, 'canton modifié'); await save(m); refresh(); },
-    prop: async () => { const p = polluantsProposes(I.annee, I.canton); POL_KEYS.forEach(k => { m.pol[k] = p[k].on; }); S.reopenFrom(m, 1, 'polluants modifiés'); await save(m); refresh(); toast('Polluants proposés'); },
+    prop: async () => { const p = polluantsProposes(I.annee, I.canton); POL_KEYS.forEach(k => { m.pol[k] = p[k].on; }); S.reopenFrom(m, 1, 'polluants modifiés'); await save(m); refresh(); },
     pick: async b => {
       $('#sug').hidden = true;
       $('#adr').value = b.dataset.label;
       I.adresse = b.dataset.label;
-      try { await regbl(m, b.dataset.fid); toast('RegBL : bâtiment trouvé'); }
-      catch (e) { toast(e.message || 'RegBL indisponible'); }
+      try { await regbl(m, b.dataset.fid); } catch (e) { /* champs restés vides : visibles dans le point de contrôle */ }
       await save(m); refresh();
     },
-    ok: async () => { S.validate(m, 1, 'Préparation validée'); buzz(25); await save(m); refresh(); toast('Préparation validée'); }
+    ok: async () => { S.validate(m, 1, 'Préparation validée'); buzz(25); await save(m); refresh(); }
   }, async (k, el, ev) => {
     if (k.startsWith('pol:')) { m.pol[k.slice(4)] = el.checked; S.reopenFrom(m, 1, 'polluants modifiés'); await save(m); refresh(); return; }
     if (k === 'volume200') { I.volume200 = el.checked; await save(m); refresh(); return; }
@@ -219,7 +218,6 @@ async function regbl(m, fid) {
   if (at.gbauj && String(at.gbauj) !== m.info.annee) { m.info.annee = String(at.gbauj); S.reopenFrom(m, 1, 'année modifiée'); }
   if (at.gastw) m.info.niveaux = String(at.gastw);
   if (at.ganzwhg) m.info.logements = String(at.ganzwhg);
-  if (!at.gbauj) throw new Error('Année de construction absente du RegBL : à saisir');
 }
 
 /* ---------- Locaux ---------- */
@@ -288,7 +286,7 @@ async function local(id, lid) {
   <div class="actions">${next ? `<a class="btn pri" href="#/m/${id}/l/${lid}/i/${next.id}">Point suivant</a>` : `<a class="btn" href="#/m/${id}/locaux">Locaux</a>`}</div>`;
   stagger(); readonly(m);
   bind({
-    ok: async () => { l.cp = { at: nowIso(), by: S.expert(m) }; S.log(m, 2, l.id, `Local validé (${l.items.length} points)`); buzz(25); await save(m); toast('Local validé'); refresh(); },
+    ok: async () => { l.cp = { at: nowIso(), by: S.expert(m) }; S.log(m, 2, l.id, `Local validé (${l.items.length} points)`); buzz(25); await save(m); refresh(); },
     addm: async () => {
       const v = await sheet(`<h2>Ajouter un matériau</h2><div class="list">${Object.entries(MAT).map(([k, x]) => `<button class="li" data-close="${k}" type="button"><div class="tx"><b>${esc(x.n)}</b><span>${x.p.map(p => POL[p].n).join(', ')}</span></div></button>`).join('')}</div><button class="btn" data-close="" type="button">Annuler</button>`);
       if (!v) return;
@@ -370,7 +368,7 @@ async function item(id, lid, iid) {
     sample: async () => {
       const an = it.pols.filter(p => polsM.includes(p));
       if (!an.length) { toast('Choisissez une analyse'); return; }
-      const c = S.newSample(m, it, an); buzz(30); changed('prélèvement créé'); await save(m); toast(`Prélèvement ${c} créé`); refresh();
+      const c = S.newSample(m, it, an); buzz(30); changed('prélèvement créé'); await save(m); refresh();
     },
     ar: async b => {
       const r = await measure(b.dataset.mode);
@@ -382,7 +380,7 @@ async function item(id, lid, iid) {
       if (!v) return;
       it.qty = v === 'add' ? String(Math.round((parseNum(it.qty) + r.value) * 100) / 100).replace('.', ',') : val;
       it.unit = r.unit; it.note = (it.note ? it.note + '\n' : '') + `Mesure caméra : ${val} ${r.unit}`;
-      changed('quantité mesurée'); await save(m); toast('Quantité enregistrée'); refresh();
+      changed('quantité mesurée'); await save(m); refresh();
     },
     next: () => { const n = l.items.find(i => i.status === 'todo' && i !== it); go(n ? `#/m/${id}/l/${lid}/i/${n.id}` : `#/m/${id}/l/${lid}`); }
   }, async (k, el, ev) => {
@@ -433,7 +431,7 @@ async function fin(id) {
   ${cpBox(3, 'Fin de visite', checks, m.cp[3], `<button class="btn pri wide" data-act="ok" type="button" ${checks.every(c => c.ok) ? '' : 'disabled'}>Valider</button>`)}
   ${m.cp[3] ? `<div class="actions"><a class="btn pri" href="#/m/${id}/labo">Laboratoire</a></div>` : ''}`;
   stagger(); readonly(m);
-  bind({ ok: async () => { S.validate(m, 3, `Visite validée : ${m.samples.length} échantillons`); buzz(25); await save(m); toast('Visite validée'); refresh(); } },
+  bind({ ok: async () => { S.validate(m, 3, `Visite validée : ${m.samples.length} échantillons`); buzz(25); await save(m); refresh(); } },
     async (k, el) => { m.fin[k] = el.checked; S.reopenFrom(m, 3, 'contrôle de fin modifié'); await save(m); refresh(); });
 }
 
@@ -464,7 +462,7 @@ async function labo(id) {
       const rows = [['code', 'local', 'materiau', 'analyses'], ...m.samples.map(s => [s.code, ...sampleCtx(m, s).split(' · '), s.analyses.map(p => POL[p].n).join('+')])];
       download(new Blob(['﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n')], { type: 'text/csv' }), `bordereau_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}.csv`);
     },
-    ok: async () => { S.validate(m, 4, 'Résultats du laboratoire validés'); buzz(25); await save(m); toast('Résultats validés'); refresh(); }
+    ok: async () => { S.validate(m, 4, 'Résultats du laboratoire validés'); buzz(25); await save(m); refresh(); }
   }, async (k, el, ev) => {
     if (k.startsWith('val:')) { const [, c, p] = k.split(':'); m.results[c] ||= {}; m.results[c][p] ||= {}; m.results[c][p].v = el.value; if (ev === 'change') { S.reopenFrom(m, 4, 'valeur modifiée'); await save(m); } return; }
     if (k.startsWith('map:') && el.value) {
@@ -472,7 +470,7 @@ async function labo(id) {
       S.log(m, 4, el.value, `Code ${u.code} rattaché par l’expert`); m.unmatched.splice(+k.slice(4), 1); await save(m); refresh();
     }
   });
-  $('#csv').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) { const n = importCsv(m, await f.text()); await save(m); toast(`${n.ok} résultat(s) importé(s)${n.ko ? ` · ${n.ko} inconnu(s)` : ''}`); refresh(); } };
+  $('#csv').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) { const n = importCsv(m, await f.text()); await save(m); refresh(); } };
 }
 function importCsv(m, txt) {
   const lines = txt.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
@@ -564,7 +562,7 @@ async function strat(id) {
       else { f.dec.ok = { at: nowIso(), by: S.expert(m) }; S.log(m, 5, f.id, ['Décision validée', f.dec.urgence && 'urgence ' + f.dec.urgence, f.dec.suva && 'code ' + SUVA[f.dec.suva].n.toLowerCase(), f.dec.mesure, f.dec.filiere].filter(Boolean).join(' · ')); buzz(); }
       await save(m); refresh();
     },
-    ok: async () => { S.validate(m, 5, 'Stratégie validée'); buzz(25); await save(m); toast('Stratégie validée'); refresh(); }
+    ok: async () => { S.validate(m, 5, 'Stratégie validée'); buzz(25); await save(m); refresh(); }
   }, async (k, el, ev) => {
     const [what, fid] = k.split(':'); const f = fam(fid); if (!f) return;
     if (what === 'fc') { f.fc = el.checked; dirty(f, 'type de matériau modifié'); await save(m); refresh(); return; }
@@ -666,17 +664,17 @@ async function rapport(id) {
   <section class="card"><h3>Journal</h3><div class="list">${m.journal.slice().reverse().slice(0, 40).map(j => `<div class="small"><b>${fdt(j.at)}</b> · ${j.cp ? 'PC ' + j.cp + ' · ' : ''}${esc(j.cible)} · ${esc(j.txt)}</div>`).join('')}</div></section>`;
   stagger(); readonly(m);
   bind({
-    type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); toast('Texte type inséré'); },
+    type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); toast('Rapport généré'); }
+      try { const { buildDocx } = await import('./report.js'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },
     sign: async () => {
       const by = (m.rapport.signataire || S.expert(m)).trim();
       m.rapport.signe = { at: nowIso(), by }; m.cp[6] = { at: m.rapport.signe.at, by };
-      S.log(m, 6, 'Rapport', `Version ${m.version} signée et figée`); buzz([20, 40, 20]); await save(m); toast('Rapport signé'); refresh();
+      S.log(m, 6, 'Rapport', `Version ${m.version} signée et figée`); buzz([20, 40, 20]); await save(m); refresh();
     },
     reopen: async () => {
       if (!await confirmSheet(`Créer la version ${m.version + 1} ?`, 'La version signée reste dans le journal. Le rapport repasse en brouillon.')) return;
@@ -695,7 +693,7 @@ async function exportJson(m) {
   const photos = [];
   for (const p of ps) photos.push({ id: p.id, b64: await blobToB64(p.blob) });
   download(new Blob([JSON.stringify({ format: 'diagpol-1', mandat: m, photos })], { type: 'application/json' }), `mandat_${(S.adresse(m) || m.id).replace(/[^\w-]+/g, '_')}.json`);
-  toast('Mandat exporté');
+  
 }
 async function importJson(file) {
   try {
@@ -706,7 +704,7 @@ async function importJson(file) {
     if (exists && !await confirmSheet('Mandat déjà présent', 'Remplacer la version de cet appareil ?', 'Remplacer', true)) return;
     for (const p of d.photos || []) await put('photos', { id: p.id, mid: m.id, blob: b64ToBlob(p.b64) });
     await put('mandats', m); S.setCurrent(null);
-    toast('Mandat importé'); go(`#/m/${m.id}`);
+    go(`#/m/${m.id}`);
   } catch (e) { toast(e.message); }
 }
 
