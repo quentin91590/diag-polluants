@@ -19,7 +19,7 @@ Chaque validation est horodatée dans un journal joint au rapport. Modifier une 
 ## Utilisation
 - Ouvrir l'adresse GitHub Pages sur le téléphone, puis « Ajouter à l'écran d'accueil ».
 - Adresse : recherche au fil de la frappe dans le RegBL (EGID, année, niveaux, logements, canton).
-- Mesure par caméra : Chrome sur Android avec ARCore (WebXR). Ailleurs, saisie manuelle.
+- Quantités saisies à la main.
 - Les données restent sur l'appareil (IndexedDB). Exporter les mandats (.json) pour les sauvegarder.
 - Résultats du labo : import CSV `code ; analyse ; résultat ; valeur`.
 
@@ -27,6 +27,5 @@ Chaque validation est horodatée dans un journal joint au rapport. Modifier une 
 - `js/ref.js` : référentiel (polluants, matériaux, types de locaux, règles) à adapter.
 - `js/store.js` : modèle de données et règles de stratégie.
 - `js/report.js` : rapport Word (structure directive genevoise et cahier des charges ASCA).
-- `js/ar.js` : métré par caméra.
 
 Bibliothèques : [docx](https://github.com/dolanmiu/docx) (MIT), [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT).

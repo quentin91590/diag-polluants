@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=19">
+<link rel="stylesheet" href="css/app.css?v=110">
 <script>
 /* Secours : si l'appli ne démarre pas, afficher la cause et proposer de réparer */
 (function () {
@@ -35,8 +35,8 @@
   setTimeout(function () { show('Le démarrage prend trop de temps.'); }, 6000);
 })();
 </script>
-<script src="js/vendor/qrcode.js?v=19" defer></script>
-<script type="module" src="js/app.js?v=19"></script>
+<script src="js/vendor/qrcode.js?v=110" defer></script>
+<script type="module" src="js/app.js?v=110"></script>
 </head>
 <body>
 <header class="bar" id="bar">
@@ -48,19 +48,6 @@
 <div class="sheet-bg" id="sheet-bg" hidden></div>
 <section class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="ar-ov" id="ar-ov" hidden>
-  <svg class="ar-svg" id="ar-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
-  <div class="ar-dots" id="ar-dots"></div>
-  <div class="ar-ret" id="ar-ret"><i></i></div>
-  <div class="ar-top"><b id="ar-mode">Mesure</b><span id="ar-msg">Démarrage de la caméra…</span></div>
-  <div class="ar-read" id="ar-read"></div>
-  <div class="ar-bot">
-    <button type="button" class="ar-b" id="ar-cancel">Annuler</button>
-    <button type="button" class="ar-b" id="ar-undo">Retour</button>
-    <button type="button" class="ar-b pri" id="ar-pt">Point</button>
-    <button type="button" class="ar-b ok" id="ar-ok" disabled>Valider</button>
-  </div>
-</div>
 <noscript>Cette application a besoin de JavaScript.</noscript>
 </body>
 </html>

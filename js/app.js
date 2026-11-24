@@ -1,12 +1,10 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=19';
-import { put, get, del, photosOf } from './db.js?v=19';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=19';
-import * as S from './store.js?v=19';
-import { arSupported, measure } from './ar.js?v=19';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=110';
+import { put, get, del, photosOf } from './db.js?v=110';
+import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=110';
+import * as S from './store.js?v=110';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let AR = false; arSupported().then(v => { AR = v; });
 let lastDepth = 0, lastHash = '';
 const urls = new Map();
 
@@ -49,7 +47,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.9';
+const APP_V = '1.10';
 /* Pas de service worker pour l'instant : on retire ceux des anciennes versions */
 if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
 if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
@@ -324,8 +322,7 @@ async function item(id, lid, iid) {
   <section class="card"><h3>Matériau</h3>${mat.v.length ? chips('var', [...mat.v, 'Autre'], mat.v.includes(it.variante) ? it.variante : (it.variante ? 'Autre' : '')) : ''}
     <input class="in" data-f="precision" placeholder="Précision (couleur, format…)" value="${esc(it.precision)}"></section>
   <section class="card"><h3>Localisation</h3>${chips('zone', ZONES, it.zone)}<input class="in" data-f="detail" placeholder="Détail (devant la fenêtre…)" value="${esc(it.detail)}"></section>
-  <section class="card"><h3>Quantité</h3><div class="qty"><input class="in" data-f="qty" inputmode="decimal" placeholder="0" value="${esc(it.qty)}"><select class="in" data-f="unit">${UNITES.map(u => `<option ${u === it.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
-    ${AR ? `<div class="grid2"><button class="btn soft" data-act="ar" data-mode="l" type="button">Mesurer une longueur</button><button class="btn soft" data-act="ar" data-mode="s" type="button">Mesurer une surface</button></div>` : `<p class="small muted">Mesure caméra : Chrome sur Android.</p>`}</section>
+  <section class="card"><h3>Quantité</h3><div class="qty"><input class="in" data-f="qty" inputmode="decimal" placeholder="0" value="${esc(it.qty)}"><select class="in" data-f="unit">${UNITES.map(u => `<option ${u === it.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div></section>
   <section class="card"><h3>État</h3>${chips('etat', ETATS, it.etat)}</section>
   <section class="card"><h3>Décision</h3>
     <div class="chips"><button type="button" class="chip c-tag ${it.status === 'prel' ? 'on' : ''}" data-act="st" data-v="prel">Prélever</button><button type="button" class="chip c-pos ${it.status === 'pres' ? 'on' : ''}" data-act="st" data-v="pres">Présumer</button><button type="button" class="chip c-neg ${it.status === 'nonsusp' ? 'on' : ''}" data-act="st" data-v="nonsusp">Non suspect</button><button type="button" class="chip c-abs ${it.status === 'abs' ? 'on' : ''}" data-act="st" data-v="abs">Absent</button></div>
@@ -367,18 +364,6 @@ async function item(id, lid, iid) {
       const an = it.pols.filter(p => polsM.includes(p));
       if (!an.length) { toast('Choisissez une analyse'); return; }
       const c = S.newSample(m, it, an); buzz(30); changed('prélèvement créé'); await save(m); refresh();
-    },
-    ar: async b => {
-      const r = await measure(b.dataset.mode);
-      if (!r) return;
-      if (r.error) { toast(r.error); return; }
-      const val = String(r.value).replace('.', ',');
-      let v = '1';
-      if (it.qty && parseNum(it.qty)) v = await sheet(`<h2>${val} ${r.unit}</h2><p class="muted">Quantité actuelle : ${esc(it.qty)} ${it.unit}</p><div class="row"><button class="btn grow" data-close="add" type="button">Ajouter</button><button class="btn pri grow" data-close="1" type="button">Remplacer</button></div>`);
-      if (!v) return;
-      it.qty = v === 'add' ? String(Math.round((parseNum(it.qty) + r.value) * 100) / 100).replace('.', ',') : val;
-      it.unit = r.unit; it.note = (it.note ? it.note + '\n' : '') + `Mesure caméra : ${val} ${r.unit}`;
-      changed('quantité mesurée'); await save(m); refresh();
     },
     next: () => { const n = l.items.find(i => i.status === 'todo' && i !== it); go(n ? `#/m/${id}/l/${lid}/i/${n.id}` : `#/m/${id}/l/${lid}`); }
   }, async (k, el, ev) => {
@@ -665,7 +650,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=19'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=110'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },
