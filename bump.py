@@ -6,6 +6,7 @@ for f in (root / 'js').glob('*.js'):
     s = f.read_text(encoding='utf-8')
     s = re.sub(r"(from '\./[a-z]+\.js)(\?v=\d+)?'", rf"\1?v={tag}'", s)
     s = re.sub(r"(import\('\./[a-z]+\.js)(\?v=\d+)?'\)", rf"\1?v={tag}')", s)
+    s = re.sub(r"('js/vendor/[a-z.]+\.js)(\?v=\d+)?'", rf"\1?v={tag}'", s)
     s = re.sub(r"const APP_V = '[^']+';", f"const APP_V = '{v}';", s)
     f.write_text(s, encoding='utf-8')
 h = root / 'index.html'; s = h.read_text(encoding='utf-8')

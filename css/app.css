@@ -231,3 +231,26 @@ table.t{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
   *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
   ::view-transition-old(root),::view-transition-new(root){animation:none}
 }
+
+/* Scan de QR code */
+.scan-ov{position:fixed;inset:0;z-index:100;background:#0d0b16;color:#fff;font-family:Poppins,system-ui,sans-serif;animation:fade .2s}
+.scan-ov.out{opacity:0;transition:opacity .2s}
+.scan-ov video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.scan-ov.nocam video,.scan-ov.nocam .scan-frame{display:none}
+.scan-frame{position:absolute;left:50%;top:46%;width:min(68vw,300px);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:22px;box-shadow:0 0 0 100vmax rgba(13,11,22,.45)}
+.scan-frame i{position:absolute;width:42px;height:42px;border:4px solid var(--tag)}
+.scan-frame i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:20px 0 0 0}
+.scan-frame i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-radius:0 20px 0 0}
+.scan-frame i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 20px}
+.scan-frame i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 20px 0}
+.scan-frame::after{content:"";position:absolute;left:10%;right:10%;height:2px;top:50%;background:var(--tag);opacity:.8;animation:scanl 1.8s ease-in-out infinite alternate}
+@keyframes scanl{from{transform:translateY(-110px)}to{transform:translateY(110px)}}
+.scan-top{position:absolute;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:grid;gap:2px;background:rgba(20,16,40,.62);backdrop-filter:blur(8px);border-radius:16px;padding:10px 14px}
+.scan-top b{font-size:15px}.scan-top span{font-size:13.5px;opacity:.92}
+.scan-bot{position:absolute;left:12px;right:12px;bottom:calc(16px + var(--safe-b));display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scan-b{min-height:54px;border-radius:16px;border:0;background:rgba(20,16,40,.66);color:#fff;font:600 15px Poppins,system-ui,sans-serif;backdrop-filter:blur(8px)}
+.scan-b.pri{background:#fff;color:var(--nc)}
+.scan-b:active{transform:scale(.95)}
+.ph-hero{padding:0;overflow:hidden}
+.ph-hero img{display:block;width:100%;max-height:260px;object-fit:cover}
+.btn svg{flex:none}

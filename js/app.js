@@ -1,7 +1,8 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=113';
-import { put, get, del, photosOf, delPhotosOf } from './db.js?v=113';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=113';
-import * as S from './store.js?v=113';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=114';
+import { scanQR } from './scan.js?v=114';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=114';
+import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=114';
+import * as S from './store.js?v=114';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -12,7 +13,7 @@ const urls = new Map();
 const routes = [
   [/^#\/?$/, home], [/^#\/m\/([^/]+)$/, dash], [/^#\/m\/([^/]+)\/prep$/, prep], [/^#\/m\/([^/]+)\/locaux$/, locaux],
   [/^#\/m\/([^/]+)\/l\/([^/]+)$/, local], [/^#\/m\/([^/]+)\/l\/([^/]+)\/i\/([^/]+)$/, item], [/^#\/m\/([^/]+)\/fin$/, fin],
-  [/^#\/m\/([^/]+)\/labo$/, labo], [/^#\/m\/([^/]+)\/etiquettes$/, etiquettes], [/^#\/m\/([^/]+)\/strat$/, strat],
+  [/^#\/m\/([^/]+)\/labo$/, labo], [/^#\/m\/([^/]+)\/e\/([^/]+)$/, echantillon], [/^#\/m\/([^/]+)\/etiquettes$/, etiquettes], [/^#\/m\/([^/]+)\/strat$/, strat],
   [/^#\/m\/([^/]+)\/synth$/, synth], [/^#\/m\/([^/]+)\/rapport$/, rapport], [/^#\/m\/([^/]+)\/mesures$/, mesures]
 ];
 const depth = h => h.split('/').filter(Boolean).length;
@@ -47,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.13';
+const APP_V = '1.14';
 const DEMO = 'immeuble-test';
 /* Pas de service worker pour l'instant : on retire ceux des anciennes versions */
 if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
@@ -84,6 +85,7 @@ async function home() {
   <div class="hero"><p class="kick">Mandats</p><h1>Diagnostics</h1></div>
   ${ms.length ? `<div class="list">${ms.map(m => { const st = S.stage(m); return `<div class="lirow"><a class="li" href="#/m/${m.id}"><div class="tx"><b>${esc(S.adresse(m) || 'Nouveau mandat')}</b><span>${esc(m.info.typeDiag)} · ${esc(st.txt)}</span></div><span class="pill ${st.n === 7 ? 'ok' : ''}">${st.n}/7</span></a><button class="li-x" data-act="del" data-id="${m.id}" type="button" aria-label="Supprimer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>`; }).join('')}</div>`
     : `<div class="card"><h2>Aucun mandat</h2><p class="muted">Créez votre premier diagnostic.</p></div>`}
+  ${ms.length ? `<button class="btn soft wide" data-act="scan" data-keep type="button">${ICON_QR}Scanner une étiquette</button>` : ''}
   ${ms.some(m => m.id === DEMO) ? '' : `<button class="btn soft wide" data-act="demo" type="button">Charger l’immeuble test</button>`}
   <p class="note">Données enregistrées sur cet appareil. Exportez vos mandats pour les sauvegarder.</p>
   <div class="actions"><button class="btn" data-act="imp" type="button">Importer</button><button class="btn pri" data-act="new" type="button">Nouveau mandat</button></div>
@@ -92,6 +94,7 @@ async function home() {
   bind({
     new: async () => { const m = S.newMandat(); S.setCurrent(m); await save(m); go(`#/m/${m.id}/prep`); },
     imp: () => $('#impf').click(),
+    scan: () => scanAndGo(),
     demo: async b => {
       b.disabled = true; b.textContent = 'Chargement…';
       try { const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable'); await importData(await r.json(), true); }
@@ -327,7 +330,7 @@ async function item(id, lid, iid) {
   };
   const polsM = POL_KEYS.filter(k => m.pol[k] || it.pols.includes(k));
   const fams = m.families.filter(f => f.id !== '').sort((a, b) => (b.key === it.key) - (a.key === it.key));
-  const sampleTags = it.samples.map(c => { const s = m.samples.find(s => s.code === c); return `<div class="tagl"><div><b>${c}</b><span>${l.id} · ${esc(it.zone || '—')}</span><span>${s ? s.analyses.map(p => POL[p].n).join(', ') : ''} · ${fd(s?.at)}</span></div><div class="qr">${qrSvg(`${c} ${l.id} ${S.adresse(m)}`)}</div></div>`; }).join('');
+  const sampleTags = it.samples.map(c => { const s = m.samples.find(s => s.code === c); return `<div class="tagl"><div><b>${c}</b><span>${l.id} · ${esc(it.zone || '—')}</span><span>${s ? s.analyses.map(p => POL[p].n).join(', ') : ''} · ${fd(s?.at)}</span></div><div class="qr">${qrSvg(qrUrl(m, c))}</div></div>`; }).join('');
   view.innerHTML = `
   <div class="hero"><p class="kick">${esc(l.nom)} · ${l.id}</p><h1>${esc(it.nom)}</h1><p>${it.pols.map(p => `<i class="pol">${POL[p].n}</i>`).join('')}</p>${mat.hint ? `<p class="note">${esc(mat.hint)}</p>` : ''}</div>
   <section class="card"><h3>Photos</h3><div class="photos" id="phs">${await phHtml()}</div><input type="file" id="cam" accept="image/*" capture="environment" hidden></section>
@@ -431,6 +434,52 @@ async function fin(id) {
 }
 
 /* ---------- Laboratoire (PC 4) ---------- */
+const ICON_QR = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 12h8"/></svg>';
+const qrUrl = (m, code) => `${location.origin}${location.pathname}#/m/${encodeURIComponent(m.id)}/e/${code}`;
+function resRows(m, s) {
+  return s.analyses.map(p => { const r = m.results[s.code]?.[p] || {}; return `<div class="f"><span>${POL[p].n}</span><div class="row"><div class="chips grow"><button type="button" class="chip c-neg ${r.r === 'nd' ? 'on' : ''}" data-act="res" data-c="${s.code}" data-p="${p}" data-v="nd">Non détecté</button><button type="button" class="chip c-pos ${r.r === 'det' ? 'on' : ''}" data-act="res" data-c="${s.code}" data-p="${p}" data-v="det">Détecté</button></div></div><input class="in" data-f="val:${s.code}:${p}" placeholder="Valeur ou type (ex. chrysotile)" value="${esc(r.v || '')}"></div>`; }).join('');
+}
+/* Lecture d'une étiquette : lien de l'appli, ou ancien texte « E-001 L-001 adresse » */
+async function scanAndGo() {
+  const t = await scanQR();
+  if (!t) return;
+  const u = t.match(/#\/m\/([^/\s]+)\/e\/(E-\d+)/);
+  if (u) { const id = decodeURIComponent(u[1]); if (!await get('mandats', id)) { toast('Ce mandat n’est pas sur cet appareil.'); return; } go(`#/m/${encodeURIComponent(id)}/e/${u[2]}`); return; }
+  const c = t.match(/\bE-\d{3,}\b/);
+  if (c) {
+    const ms = (await S.list()).filter(m => m.samples.some(s => s.code === c[0]));
+    const m = ms.find(m => S.adresse(m) && t.includes(S.adresse(m))) || (ms.length === 1 ? ms[0] : null);
+    if (m) { go(`#/m/${encodeURIComponent(m.id)}/e/${c[0]}`); return; }
+  }
+  toast('QR code non reconnu.');
+}
+
+/* ---------- Échantillon (ouvert par QR code) ---------- */
+async function echantillon(id, code) {
+  id = decodeURIComponent(id);
+  const m = await S.load(id);
+  if (!m) { head('Échantillon', code); view.innerHTML = `<div class="card"><h2>${esc(code)}</h2><p class="muted">Ce mandat n’est pas sur cet appareil.</p><a class="btn" href="#/">Accueil</a></div>`; return; }
+  const s = m.samples.find(s => s.code === code);
+  if (!s) { head('Échantillon', code); view.innerHTML = `<div class="card"><h2>${esc(code)}</h2><p class="muted">Échantillon introuvable dans ce mandat.</p><a class="btn" href="#/m/${encodeURIComponent(id)}">Mandat</a></div>`; return; }
+  const x = S.allItems(m).find(x => x.it.id === s.item);
+  head(code, S.adresse(m));
+  const ph = x && x.it.photos[0] ? await photoUrl(x.it.photos[0].id) : '';
+  const open = !!m.cp[3];
+  view.innerHTML = `
+  <div class="hero"><p class="kick">${x ? `${esc(x.l.niveau)} · ${esc(x.l.nom)} · ${x.l.id}` : ''}</p><h1>${code}</h1><p>${x ? esc([x.it.variante || x.it.nom, x.it.zone].filter(Boolean).join(' · ')) : ''}</p></div>
+  ${ph ? `<div class="card ph-hero"><img src="${ph}" alt=""></div>` : ''}
+  <section class="card"><h3>Résultats du labo</h3>${open ? resRows(m, s) : `<p class="small muted">Saisie après la fin de visite (point de contrôle 3).</p><p>${s.analyses.map(p => `<i class="pol">${POL[p].n}</i>`).join('')}</p>`}</section>
+  <div class="row">${x ? `<a class="btn sm soft" href="#/m/${encodeURIComponent(id)}/l/${x.l.id}/i/${x.it.id}">Matériau</a>` : ''}${open ? `<a class="btn sm soft" href="#/m/${encodeURIComponent(id)}/labo">Laboratoire</a>` : ''}</div>
+  <div class="actions"><button class="btn pri" data-act="scan" data-keep type="button">${ICON_QR}Scanner le suivant</button></div>`;
+  stagger(); readonly(m);
+  const setRes = (c, p, k, v) => { m.results[c] ||= {}; m.results[c][p] ||= {}; m.results[c][p][k] = v; S.reopenFrom(m, 4, 'résultat modifié'); };
+  bind({
+    scan: () => scanAndGo(),
+    res: async b => { setRes(b.dataset.c, b.dataset.p, 'r', b.dataset.v); S.log(m, 4, b.dataset.c, `${POL[b.dataset.p].n} : ${b.dataset.v === 'det' ? 'détecté' : 'non détecté'} (scan)`); buzz(); await save(m); refresh(); }
+  }, async (k, el, ev) => {
+    if (k.startsWith('val:')) { const [, c, p] = k.split(':'); m.results[c] ||= {}; m.results[c][p] ||= {}; m.results[c][p].v = el.value; if (ev === 'change') { S.reopenFrom(m, 4, 'valeur modifiée'); await save(m); } }
+  });
+}
 function sampleCtx(m, s) { const x = S.allItems(m).find(x => x.it.id === s.item); return x ? `${x.l.id} · ${x.it.variante || x.it.nom}` : '—'; }
 async function labo(id) {
   const m = await mand(id);
@@ -440,10 +489,10 @@ async function labo(id) {
   const checks = [{ ok: !miss, txt: miss ? `${miss} résultat(s) manquant(s)` : 'Résultats complets' }, { ok: !m.unmatched.length, txt: m.unmatched.length ? `${m.unmatched.length} code(s) inconnu(s)` : 'Codes rattachés' }];
   view.innerHTML = `
   <section class="card"><div class="row between"><h2>${m.samples.length} échantillons</h2><div class="row"><a class="btn sm soft" href="#/m/${id}/etiquettes">Étiquettes</a><button class="btn sm soft" data-act="bord" data-keep type="button">Bordereau</button></div></div>
-    <button class="btn" data-act="imp" type="button">Importer les résultats (CSV)</button><p class="small muted">Colonnes : code ; analyse ; résultat ; valeur</p><input type="file" id="csv" accept=".csv,.txt,text/csv" hidden></section>
+    <div class="grid2"><button class="btn" data-act="scan" data-keep type="button">${ICON_QR}Scanner</button><button class="btn" data-act="imp" type="button">Importer CSV</button></div><p class="small muted">Colonnes : code ; analyse ; résultat ; valeur</p><input type="file" id="csv" accept=".csv,.txt,text/csv" hidden></section>
   ${m.unmatched.length ? `<section class="card"><h3>Codes inconnus</h3>${m.unmatched.map((u, i) => `<div class="row"><span class="pill wait">${esc(u.code)}</span><span class="small grow">${esc(POL[u.p]?.n || u.p)} · ${u.r === 'det' ? 'Détecté' : 'Non détecté'} ${esc(u.v || '')}</span><select class="in" style="max-width:150px" data-f="map:${i}"><option value="">Rattacher à…</option>${m.samples.filter(s => s.analyses.includes(u.p)).map(s => `<option value="${s.code}">${s.code}</option>`).join('')}</select><button class="btn sm ghost" data-act="drop" data-i="${i}" type="button">Ignorer</button></div>`).join('')}</section>` : ''}
   ${m.samples.map(s => `<section class="card"><div class="row between"><b>${s.code}</b><span class="small muted">${esc(sampleCtx(m, s))}</span></div>
-    ${s.analyses.map(p => { const r = m.results[s.code]?.[p] || {}; return `<div class="f"><span>${POL[p].n}</span><div class="row"><div class="chips grow"><button type="button" class="chip c-neg ${r.r === 'nd' ? 'on' : ''}" data-act="res" data-c="${s.code}" data-p="${p}" data-v="nd">Non détecté</button><button type="button" class="chip c-pos ${r.r === 'det' ? 'on' : ''}" data-act="res" data-c="${s.code}" data-p="${p}" data-v="det">Détecté</button></div></div><input class="in" data-f="val:${s.code}:${p}" placeholder="Valeur ou type (ex. chrysotile)" value="${esc(r.v || '')}"></div>`; }).join('')}
+    ${resRows(m, s)}
   </section>`).join('')}
   ${cpBox(4, 'Résultats du labo', checks, m.cp[4], `<button class="btn pri wide" data-act="ok" type="button" ${checks.every(c => c.ok) ? '' : 'disabled'}>Valider</button>`)}
   ${m.cp[4] ? `<div class="actions"><a class="btn pri" href="#/m/${id}/strat">Stratégie</a></div>` : ''}`;
@@ -452,6 +501,7 @@ async function labo(id) {
   bind({
     res: async b => { setRes(b.dataset.c, b.dataset.p, 'r', b.dataset.v); S.log(m, 4, b.dataset.c, `${POL[b.dataset.p].n} : ${b.dataset.v === 'det' ? 'détecté' : 'non détecté'} (saisie)`); await save(m); refresh(); },
     imp: () => $('#csv').click(),
+    scan: () => scanAndGo(),
     drop: async b => { m.unmatched.splice(+b.dataset.i, 1); await save(m); refresh(); },
     bord: () => {
       const rows = [['code', 'local', 'materiau', 'analyses'], ...m.samples.map(s => [s.code, ...sampleCtx(m, s).split(' · '), s.analyses.map(p => POL[p].n).join('+')])];
@@ -493,7 +543,7 @@ async function etiquettes(id) {
   head('Étiquettes', `${m.samples.length} échantillons`);
   const its = S.allItems(m);
   view.innerHTML = `
-  ${m.samples.length ? `<div class="labels">${m.samples.map(s => { const x = its.find(x => x.it.id === s.item); return `<div class="lab-p"><div class="qr">${qrSvg(`${s.code} ${x ? x.l.id : ''} ${S.adresse(m)}`)}</div><div><b>${s.code}</b><span>${x ? `${esc(x.l.niveau)} · ${esc(x.l.nom)} (${x.l.id})` : ''}</span><span>${x ? esc([x.it.zone, x.it.variante || x.it.nom].filter(Boolean).join(' · ')) : ''}</span><span>${s.analyses.map(p => POL[p].n).join(', ')} · ${fd(s.at)}</span></div></div>`; }).join('')}</div>` : `<div class="card"><p class="muted">Aucun prélèvement.</p></div>`}
+  ${m.samples.length ? `<div class="labels">${m.samples.map(s => { const x = its.find(x => x.it.id === s.item); return `<div class="lab-p"><div class="qr">${qrSvg(qrUrl(m, s.code))}</div><div><b>${s.code}</b><span>${x ? `${esc(x.l.niveau)} · ${esc(x.l.nom)} (${x.l.id})` : ''}</span><span>${x ? esc([x.it.zone, x.it.variante || x.it.nom].filter(Boolean).join(' · ')) : ''}</span><span>${s.analyses.map(p => POL[p].n).join(', ')} · ${fd(s.at)}</span></div></div>`; }).join('')}</div>` : `<div class="card"><p class="muted">Aucun prélèvement.</p></div>`}
   <div class="actions noprint"><button class="btn pri" data-act="print" data-keep type="button">Imprimer</button></div>`;
   stagger();
   bind({ print: () => window.print() });
@@ -662,7 +712,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=113'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=114'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },

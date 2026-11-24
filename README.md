@@ -30,3 +30,4 @@ Chaque validation est horodatée dans un journal joint au rapport. Modifier une 
 - `js/report.js` : rapport Word (structure directive genevoise et cahier des charges ASCA).
 
 Bibliothèques : [docx](https://github.com/dolanmiu/docx) (MIT), [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT).
+- jsQR (Apache 2.0) : lecture des QR codes des étiquettes (`js/vendor/jsqr.js`, `js/scan.js`).
