@@ -48,7 +48,13 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+const APP_V = '1.3';
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !reloaded) { reloaded = true; location.reload(); } });
+}
 
 function head(title, sub) { $('#title').textContent = title; $('#subtitle').textContent = sub || ''; document.title = title === 'Diagnostic polluants' ? title : title + ' · Diagnostic polluants'; }
 function stagger() { $$('#view > *').forEach((e, i) => e.style.setProperty('--i', i)); }
@@ -75,7 +81,7 @@ async function photoUrl(id) {
 
 /* ---------- Accueil ---------- */
 async function home() {
-  head('Diagnostic polluants', 'Prototype pour Novacity');
+  head('Diagnostic polluants', `Prototype pour Novacity · v${APP_V}`);
   const ms = await S.list();
   view.innerHTML = `
   <div class="hero"><p class="kick">Mandats</p><h1>Diagnostics</h1></div>
