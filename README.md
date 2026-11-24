@@ -26,6 +26,7 @@ Chaque validation est horodatée dans un journal joint au rapport. Modifier une 
 ## Fichiers
 - `js/ref.js` : référentiel (polluants, matériaux, types de locaux, règles) à adapter.
 - `js/store.js` : modèle de données et règles de stratégie.
+- `scenes/` : maquette 3/4 de chaque type de local (image + contours des matériaux) ; générateur dans `outils/scenes/`.
 - `demo/immeuble-test.json` : immeuble test complet (photos générées avec SD-Turbo, Stability AI).
 - `js/report.js` : rapport Word (structure directive genevoise et cahier des charges ASCA).
 

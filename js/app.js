@@ -1,8 +1,8 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=118';
-import { scanQR } from './scan.js?v=118';
-import { put, get, del, photosOf, delPhotosOf } from './db.js?v=118';
-import { checklistFor, POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=118';
-import * as S from './store.js?v=118';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=119';
+import { scanQR } from './scan.js?v=119';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=119';
+import { SCENES, checklistFor, POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=119';
+import * as S from './store.js?v=119';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.18';
+const APP_V = '1.19';
 const DEMO = 'immeuble-test', DEMO_REV = 2;
 async function loadDemo(stay) {
   const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable');
@@ -294,6 +294,58 @@ function touchLocal(m, l, why) {
   if (l.cp) { l.cp = null; S.log(m, 2, l.id, 'Rouvert : ' + why); }
   S.reopenFrom(m, 3, why);
 }
+/* ---------- Maquette 3/4 d'un local ---------- */
+const sceneCache = new Map();
+async function loadScene(type) {
+  const slug = SCENES[type] || SCENES.Autre;
+  if (!sceneCache.has(slug)) sceneCache.set(slug, fetch(`scenes/${slug}.json?v=${APP_V}`).then(r => (r.ok ? r.json() : null)).catch(() => null));
+  const sc = await sceneCache.get(slug);
+  return sc ? { ...sc, slug } : null;
+}
+const SCOL = { todo: '#4e4184', prel: '#f5c400', pres: '#d1182b', nonsusp: '#0f6fc6', abs: '#0f6fc6', none: '#4e4184' };
+/* Associe chaque objet de la scène au premier matériau du local de même type */
+function sceneMap(sc, l) {
+  const map = {};
+  for (const tag of Object.keys(sc.regions)) map[tag] = l.items.find(i => i.key === tag) || null;
+  return map;
+}
+function sceneHtml(sc, map, sel, mini) {
+  const k = sc.w / 360;
+  let g = `<defs><filter id="sg" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${(6 * k / 2.6).toFixed(1)}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="sg2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${(3 * k / 2.6).toFixed(1)}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  const tags = Object.keys(sc.regions).sort((a, b) => sc.regions[b].big - sc.regions[a].big);
+  for (const tag of tags) {
+    const r = sc.regions[tag], it = map[tag], st = it ? it.status : 'none', c = SCOL[st];
+    const rest = r.big || st === 'none' ? 0 : 0.9, dash = st === 'todo' || st === 'none' ? `stroke-dasharray="${(3 * k).toFixed(1)} ${(2.4 * k).toFixed(1)}"` : '';
+    g += `<g class="hl${tag === sel ? ' on' : ''}" data-act="rg" data-tag="${tag}">
+<path d="${r.d}" fill="transparent" stroke="transparent" stroke-width="${((r.big ? 9 : 16) * k).toFixed(1)}" fill-rule="evenodd" pointer-events="${r.big ? 'stroke' : 'all'}"/>
+<path class="tint" d="${r.d}" fill="${c}" fill-opacity="0" fill-rule="evenodd" pointer-events="none"/>
+<path class="rest" d="${r.d}" fill="none" stroke="${c}" stroke-width="${(1.1 * k).toFixed(1)}" stroke-opacity="${rest}" stroke-linejoin="round" ${dash} pointer-events="none"/>
+<path class="edge" d="${r.d}" fill="none" stroke="${c}" stroke-width="${(2 * k).toFixed(1)}" stroke-linejoin="round" filter="url(#sg2)" pointer-events="none"/>
+<path class="trail" d="${r.d}" fill="none" stroke="#fff" stroke-width="${(2.6 * k).toFixed(1)}" stroke-linecap="round" pathLength="100" stroke-dasharray="6 94" filter="url(#sg)" pointer-events="none"/>
+<path class="trail t2" d="${r.d}" fill="none" stroke="${c}" stroke-width="${(2.2 * k).toFixed(1)}" stroke-linecap="round" pathLength="100" stroke-dasharray="4 96" filter="url(#sg)" pointer-events="none"/></g>`;
+  }
+  (sc.labels || []).forEach(([x, y], i) => { g += `<g pointer-events="none"><circle cx="${x}" cy="${y}" r="${(7 * k).toFixed(1)}" fill="#fff" stroke="#4e4184" stroke-width="${(0.9 * k).toFixed(1)}"/><text x="${x}" y="${(y + 2.9 * k).toFixed(1)}" text-anchor="middle" font-size="${(8 * k).toFixed(1)}" font-weight="600" fill="#4e4184" font-family="Poppins,system-ui,sans-serif">${'BCAD'[i]}</text></g>`; });
+  g += `<g id="schip" data-act="rgo"></g>`;
+  return `<div class="stage3${mini ? ' mini' : ''}" id="stage3" style="aspect-ratio:${sc.w}/${sc.h}"><img src="scenes/${sc.slug}.jpg?v=${APP_V}" alt="" draggable="false"><svg viewBox="0 0 ${sc.w} ${sc.h}" xmlns="http://www.w3.org/2000/svg">${g}</svg></div>`;
+}
+/* Sélection sans recharger la page (l'animation reste fluide) */
+function sceneSelect(sc, map, tag, ro, here) {
+  $$('#stage3 .hl').forEach(e => e.classList.toggle('on', e.dataset.tag === tag));
+  const ch = $('#schip'); if (!ch) return;
+  if (!tag) { ch.innerHTML = ''; return; }
+  const g = $(`#stage3 .hl[data-tag="${tag}"]`); g.parentNode.insertBefore(g, ch);
+  const k = sc.w / 360, r = sc.regions[tag], it = map[tag], st = it ? it.status : 'none';
+  let name = it ? (it.variante || it.nom) : (MAT[tag] || MAT.autre).n;
+  const act = here ? '' : it ? 'Ouvrir ›' : ro ? '' : '+ Ajouter';
+  const fs = 10.5 * k, cw = 5.9 * k, maxW = sc.w - 16 * k;
+  const room = Math.floor((maxW - (act.length * cw + 46 * k)) / cw);
+  if (name.length > room) name = name.slice(0, Math.max(6, room - 1)).trimEnd() + '…';
+  const w = (name.length + act.length) * cw + 46 * k, h = 20 * k;
+  const x = Math.min(Math.max(r.top[0], w / 2 + 8 * k), sc.w - w / 2 - 8 * k), y = Math.max(r.top[1] - 14 * k, h / 2 + 6 * k);
+  ch.innerHTML = `<rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${h / 2}" fill="#1e1a33" fill-opacity=".93"/><circle cx="${x - w / 2 + 11 * k}" cy="${y}" r="${3.2 * k}" fill="${SCOL[st]}" stroke="#fff" stroke-width="${0.6 * k}"/><text x="${x - w / 2 + 20 * k}" y="${y + fs * 0.36}" font-size="${fs}" font-weight="500" fill="#fff" font-family="Poppins,system-ui,sans-serif">${esc(name)}${act ? `<tspan fill="#c9c2ff" font-weight="600" dx="${6 * k}">${act}</tspan>` : ''}</text>`;
+}
+const LEGEND3 = `<div class="leg3"><span><i style="background:#f5c400"></i>Prélevé</span><span><i style="background:#d1182b"></i>Présumé</span><span><i style="background:#0f6fc6"></i>Sain ou absent</span><span><i class="d"></i>À vérifier</span></div>`;
+
 async function local(id, lid) {
   const m = await mand(id); const l = S.findLocal(m, lid);
   if (!l) { go(`#/m/${id}/locaux`); return; }
@@ -301,15 +353,34 @@ async function local(id, lid) {
   const checks = S.localChecks(l);
   const ok = checks.filter(c => c.block).every(c => c.ok);
   const next = l.items.find(i => i.status === 'todo');
+  const sc = await loadScene(l.type);
+  const map = sc ? sceneMap(sc, l) : {};
+  const inScene = new Set(Object.values(map).filter(Boolean));
+  const others = l.items.filter(it => !inScene.has(it));
+  const row = it => { const [t, c] = STA[it.status]; const pl = it.status === 'pres' ? it.presPol : it.pols; return `<a class="li" href="#/m/${id}/l/${lid}/i/${it.id}"><div class="tx"><b>${esc(it.variante || it.nom)}</b><span>${pl.map(p => `<i class="pol">${POL[p].n}</i>`).join('')}${it.zone ? ' ' + esc(it.zone) : ''}${it.qty ? ` · ${esc(it.qty)} ${it.unit}` : ''}</span></div><span class="pill ${c}">${t}${it.samples.length ? ' ' + it.samples.join(', ') : ''}</span></a>`; };
+  const nDone = l.items.filter(i => i.status !== 'todo').length;
   view.innerHTML = `
-  <p class="note">Paroi A = porte d’entrée, puis B, C, D dans le sens horaire.</p>
-  <div class="list">${l.items.map(it => { const [t, c] = STA[it.status]; const pl = it.status === 'pres' ? it.presPol : it.pols; return `<a class="li" href="#/m/${id}/l/${lid}/i/${it.id}"><div class="tx"><b>${esc(it.variante || it.nom)}</b><span>${pl.map(p => `<i class="pol">${POL[p].n}</i>`).join('')}${it.zone ? ' ' + esc(it.zone) : ''}${it.qty ? ` · ${esc(it.qty)} ${it.unit}` : ''}</span></div><span class="pill ${c}">${t}${it.samples.length ? ' ' + it.samples.join(', ') : ''}</span></a>`; }).join('')}</div>
+  ${sc ? `${sceneHtml(sc, map, null)}
+  <div class="row between"><b class="small">${nDone}/${l.items.length} matériaux traités</b><span class="small muted">Touchez un objet</span></div>
+  ${LEGEND3}
+  ${sc.labels ? `<p class="small muted">Paroi A = porte d’entrée, puis B, C, D dans le sens horaire.</p>` : ''}` : `<p class="note">Paroi A = porte d’entrée, puis B, C, D dans le sens horaire.</p>`}
+  ${others.length ? `${sc ? '<h3>Autres matériaux</h3>' : ''}<div class="list">${others.map(row).join('')}</div>` : ''}
   <button class="btn soft" data-act="addm" type="button">Ajouter un matériau</button>
   ${cpBox(2, 'Fin du local', checks, l.cp, `<button class="btn pri wide" data-act="ok" type="button" ${ok ? '' : 'disabled'}>Valider le local</button>`)}
   <button class="btn sm danger" data-act="dell" type="button">Supprimer le local</button>
   <div class="actions">${next ? `<a class="btn pri" href="#/m/${id}/l/${lid}/i/${next.id}">Point suivant</a>` : `<a class="btn" href="#/m/${id}/locaux">Locaux</a>`}</div>`;
   stagger(); readonly(m);
+  let selTag = null;
+  const ro = !!m.rapport.signe;
+  const openTag = async tag => {
+    const it = map[tag];
+    if (it) { go(`#/m/${id}/l/${lid}/i/${it.id}`); return; }
+    if (ro) { toast('Version signée : lecture seule.'); return; }
+    const n = S.newItem(m, tag); n.added = true; l.items.push(n); touchLocal(m, l, 'matériau ajouté'); buzz(20); await save(m); go(`#/m/${id}/l/${lid}/i/${n.id}`);
+  };
   bind({
+    rg: b => { const t = b.dataset.tag; if (selTag === t) { openTag(t); return; } selTag = t; buzz(8); sceneSelect(sc, map, t, ro); },
+    rgo: () => { if (selTag) openTag(selTag); },
     ok: async () => { l.cp = { at: nowIso(), by: S.expert(m) }; S.log(m, 2, l.id, `Local validé (${l.items.length} points)`); buzz(25); await save(m); refresh(); },
     addm: async () => {
       const v = await sheet(`<h2>Ajouter un matériau</h2><div class="list">${Object.entries(MAT).map(([k, x]) => `<button class="li" data-close="${k}" type="button"><div class="tx"><b>${esc(x.n)}</b><span>${x.p.map(p => POL[p].n).join(', ')}</span></div></button>`).join('')}</div><button class="btn" data-close="" type="button">Annuler</button>`);
@@ -333,6 +404,7 @@ async function item(id, lid, iid) {
   if (!it) { go(`#/m/${id}/l/${lid}`); return; }
   const mat = MAT[it.key] || MAT.autre;
   head(it.variante || it.nom, `${l.nom} · ${l.id}`);
+  const isc = await loadScene(l.type), smap = isc ? sceneMap(isc, l) : {}, stag = isc ? Object.keys(smap).find(t => smap[t] === it) : null;
   const ph = [...it.photos];
   const slots = [{ k: 'large', t: 'Vue large' }, { k: 'proche', t: 'Vue rapprochée' }];
   const phHtml = async () => {
@@ -348,6 +420,7 @@ async function item(id, lid, iid) {
   const sampleTags = it.samples.map(c => { const s = m.samples.find(s => s.code === c); return `<div class="tagl"><div><b>${c}</b><span>${l.id} · ${esc(it.zone || '—')}</span><span>${s ? s.analyses.map(p => POL[p].n).join(', ') : ''} · ${fd(s?.at)}</span></div><div class="qr">${qrSvg(qrUrl(m, c))}</div></div>`; }).join('');
   view.innerHTML = `
   <div class="hero"><p class="kick">${esc(l.nom)} · ${l.id}</p><h1>${esc(it.nom)}</h1><p>${it.pols.map(p => `<i class="pol">${POL[p].n}</i>`).join('')}</p>${mat.hint ? `<p class="note">${esc(mat.hint)}</p>` : ''}</div>
+  ${stag ? sceneHtml(isc, smap, stag, true) : ''}
   <section class="card"><h3>Photos</h3><div class="photos" id="phs">${await phHtml()}</div><input type="file" id="cam" accept="image/*" capture="environment" hidden></section>
   <section class="card"><h3>Matériau</h3>${mat.v.length ? chips('var', [...mat.v, 'Autre'], mat.v.includes(it.variante) ? it.variante : (it.variante ? 'Autre' : '')) : ''}
     <input class="in" data-f="precision" placeholder="Précision (couleur, format…)" value="${esc(it.precision)}"></section>
@@ -366,6 +439,7 @@ async function item(id, lid, iid) {
   ${deletable ? `<button class="btn sm danger" data-act="deli" type="button">Supprimer le matériau</button>` : ''}
   <div class="actions"><a class="btn" href="#/m/${id}/l/${lid}">Local</a><button class="btn pri" data-act="next" data-keep type="button">Suivant</button></div>`;
   stagger(); readonly(m);
+  if (stag) sceneSelect(isc, smap, stag, true, true);
   let shotKind = 'large';
   const changed = why => touchLocal(m, l, why);
   const light = (why, from) => touchLight(m, l, why, from);
@@ -736,7 +810,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=118'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=119'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },
