@@ -38,7 +38,7 @@ async function route(still) {
     for (const [re, fn] of routes) { const mm = h.match(re); if (mm) { try { await fn(...mm.slice(1)); } catch (e) { console.error(e); view.innerHTML = `<div class="card"><h2>Oups</h2><p class="muted">${esc(e.message)}</p><a class="btn" href="#/">Accueil</a></div>`; } return; } }
     go('#/');
   };
-  if (!still && !same && document.startViewTransition && !reduced) { await document.startViewTransition(run).updateCallbackDone; }
+  if (!still && !same && document.startViewTransition && !reduced) { const vt = document.startViewTransition(run); vt.ready.catch(() => {}); vt.finished.catch(() => {}); await vt.updateCallbackDone.catch(() => {}); }
   else await run();
   if (!still && !same) window.scrollTo(0, 0);
 }
