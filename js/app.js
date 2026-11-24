@@ -1,8 +1,8 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=118';
-import { scanQR } from './scan.js?v=118';
-import { put, get, del, photosOf, delPhotosOf } from './db.js?v=118';
-import { checklistFor, POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=118';
-import * as S from './store.js?v=118';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=120';
+import { scanQR } from './scan.js?v=120';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=120';
+import { checklistFor, POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=120';
+import * as S from './store.js?v=120';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.18';
+const APP_V = '1.20';
 const DEMO = 'immeuble-test', DEMO_REV = 2;
 async function loadDemo(stay) {
   const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable');
@@ -312,7 +312,7 @@ async function local(id, lid) {
   bind({
     ok: async () => { l.cp = { at: nowIso(), by: S.expert(m) }; S.log(m, 2, l.id, `Local validé (${l.items.length} points)`); buzz(25); await save(m); refresh(); },
     addm: async () => {
-      const v = await sheet(`<h2>Ajouter un matériau</h2><div class="list">${Object.entries(MAT).map(([k, x]) => `<button class="li" data-close="${k}" type="button"><div class="tx"><b>${esc(x.n)}</b><span>${x.p.map(p => POL[p].n).join(', ')}</span></div></button>`).join('')}</div><button class="btn" data-close="" type="button">Annuler</button>`);
+      const v = await sheet(`<div class="sh-head"><h2>Ajouter un matériau</h2><button class="sh-x" data-close="" type="button" aria-label="Fermer">×</button></div><div class="list">${Object.entries(MAT).map(([k, x]) => `<button class="li" data-close="${k}" type="button"><div class="tx"><b>${esc(x.n)}</b><span>${x.p.map(p => POL[p].n).join(', ')}</span></div></button>`).join('')}</div><button class="btn" data-close="" type="button">Annuler</button>`);
       if (!v) return;
       const it = S.newItem(m, v); it.added = true; l.items.push(it); touchLocal(m, l, 'matériau ajouté'); await save(m); go(`#/m/${id}/l/${lid}/i/${it.id}`);
     },
@@ -736,7 +736,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=118'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=120'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },
