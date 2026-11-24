@@ -1,11 +1,11 @@
 /* Lecture de QR code : caméra arrière (BarcodeDetector si présent, sinon jsQR), ou photo si la caméra est refusée. */
-import { buzz } from './util.js?v=114';
+import { buzz } from './util.js?v=116';
 
 let libP = null;
 const loadLib = () => libP ||= new Promise((ok, ko) => {
   if (window.jsQR) return ok(window.jsQR);
   const s = document.createElement('script');
-  s.src = 'js/vendor/jsqr.js?v=114';
+  s.src = 'js/vendor/jsqr.js?v=116';
   s.onload = () => ok(window.jsQR); s.onerror = () => ko(new Error('Lecteur QR indisponible'));
   document.head.appendChild(s);
 });

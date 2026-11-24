@@ -1,8 +1,8 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=114';
-import { scanQR } from './scan.js?v=114';
-import { put, get, del, photosOf, delPhotosOf } from './db.js?v=114';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=114';
-import * as S from './store.js?v=114';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=116';
+import { scanQR } from './scan.js?v=116';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=116';
+import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=116';
+import * as S from './store.js?v=116';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,8 +48,12 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.14';
-const DEMO = 'immeuble-test';
+const APP_V = '1.16';
+const DEMO = 'immeuble-test', DEMO_REV = 2;
+async function loadDemo(stay) {
+  const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable');
+  await importData(await r.json(), true, stay);
+}
 /* Pas de service worker pour l'instant : on retire ceux des anciennes versions */
 if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
 if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
@@ -80,7 +84,9 @@ async function photoUrl(id) {
 /* ---------- Accueil ---------- */
 async function home() {
   head('Diagnostic polluants', `Prototype pour Novacity · v${APP_V}`);
-  const ms = await S.list();
+  let ms = await S.list();
+  const dm = ms.find(m => m.id === DEMO);
+  if (dm && (dm.demo || 1) < DEMO_REV) { try { await loadDemo(true); ms = await S.list(); } catch (e) { /* on garde l'ancien */ } }
   view.innerHTML = `
   <div class="hero"><p class="kick">Mandats</p><h1>Diagnostics</h1></div>
   ${ms.length ? `<div class="list">${ms.map(m => { const st = S.stage(m); return `<div class="lirow"><a class="li" href="#/m/${m.id}"><div class="tx"><b>${esc(S.adresse(m) || 'Nouveau mandat')}</b><span>${esc(m.info.typeDiag)} · ${esc(st.txt)}</span></div><span class="pill ${st.n === 7 ? 'ok' : ''}">${st.n}/7</span></a><button class="li-x" data-act="del" data-id="${m.id}" type="button" aria-label="Supprimer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>`; }).join('')}</div>`
@@ -97,7 +103,7 @@ async function home() {
     scan: () => scanAndGo(),
     demo: async b => {
       b.disabled = true; b.textContent = 'Chargement…';
-      try { const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable'); await importData(await r.json(), true); }
+      try { await loadDemo(); }
       catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Charger l’immeuble test'; }
     },
     del: async b => {
@@ -277,6 +283,8 @@ async function addLocalSheet(m) {
 
 /* ---------- Local (PC 2) ---------- */
 const STA = { todo: ['À vérifier', ''], prel: ['Prélevé', 'prel'], pres: ['Présumé', 'pres'], nonsusp: ['Non suspect', 'nonsusp'], abs: ['Absent', 'abs'] };
+/* Modification descriptive : tracée au journal, sans rouvrir les validations (sauf la signature, ou la stratégie pour l'état) */
+function touchLight(m, l, why, from = 6) { S.log(m, 2, l.id, why); S.reopenFrom(m, from, why); }
 function touchLocal(m, l, why) {
   if (l.cp) { l.cp = null; S.log(m, 2, l.id, 'Rouvert : ' + why); }
   S.reopenFrom(m, 3, why);
@@ -352,16 +360,17 @@ async function item(id, lid, iid) {
   stagger(); readonly(m);
   let shotKind = 'large';
   const changed = why => touchLocal(m, l, why);
+  const light = (why, from) => touchLight(m, l, why, from);
   bind({
     shot: b => { shotKind = b.dataset.k; $('#cam').click(); },
     phv: async b => {
       const u = await photoUrl(b.dataset.id);
       const v = await sheet(`<img src="${u}" alt="Photo" style="width:100%;border-radius:14px"><div class="row"><button class="btn grow" data-close="" type="button">Fermer</button>${m.rapport.signe ? '' : '<button class="btn danger grow" data-close="del" type="button">Supprimer</button>'}</div>`);
-      if (v === 'del') { it.photos = it.photos.filter(p => p.id !== b.dataset.id); await del('photos', b.dataset.id); changed('photo supprimée'); await save(m); refresh(); }
+      if (v === 'del') { it.photos = it.photos.filter(p => p.id !== b.dataset.id); await del('photos', b.dataset.id); light('photo supprimée'); await save(m); refresh(); }
     },
     var: async b => { it.variante = b.dataset.v === 'Autre' ? '' : b.dataset.v; if (b.dataset.v === 'Autre') $('[data-f=precision]').focus(); changed('matériau modifié'); await save(m); refresh(); },
-    zone: async b => { it.zone = b.dataset.v; changed('localisation modifiée'); await save(m); refresh(); },
-    etat: async b => { it.etat = b.dataset.v; changed('état modifié'); await save(m); refresh(); },
+    zone: async b => { it.zone = b.dataset.v; light('localisation modifiée'); await save(m); refresh(); },
+    etat: async b => { it.etat = b.dataset.v; light('état modifié', 5); await save(m); refresh(); },
     st: async b => {
       const v = b.dataset.v;
       if (v === it.status) return;
@@ -388,9 +397,9 @@ async function item(id, lid, iid) {
       if (el.value === '+') { it.fam = S.newFamily(m, it).id; } else it.fam = el.value;
       S.cleanFamilies(m); changed('famille modifiée'); await save(m); refresh(); return;
     }
-    if (k === 'unit') { it.unit = el.value; changed('unité modifiée'); await save(m); return; }
+    if (k === 'unit') { it.unit = el.value; light('unité modifiée'); await save(m); return; }
     it[k] = el.value;
-    if (ev === 'change') { changed(k + ' modifié'); await save(m); }
+    if (ev === 'change') { const lbl = { qty: 'quantité modifiée', precision: 'précision modifiée', detail: 'détail modifié', note: 'note modifiée', justif: 'justification modifiée' }[k] || k + ' modifié'; ['qty', 'precision', 'detail', 'note'].includes(k) ? light(lbl) : changed(lbl); await save(m); }
   });
   $('#cam').onchange = async e => {
     const file = e.target.files[0]; e.target.value = '';
@@ -400,7 +409,7 @@ async function item(id, lid, iid) {
     await put('photos', { id: pid, mid: m.id, blob });
     if (shotKind !== 'autre') it.photos = it.photos.filter(p => p.kind !== shotKind);
     it.photos.push({ id: pid, kind: shotKind });
-    changed('photo ajoutée'); await save(m); buzz(); refresh();
+    light('photo ajoutée'); await save(m); buzz(); refresh();
   };
 }
 
@@ -712,7 +721,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=114'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=116'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },
@@ -743,7 +752,7 @@ async function exportJson(m) {
 async function importJson(file) {
   try { await importData(JSON.parse(await file.text())); } catch (e) { toast(e.message); }
 }
-async function importData(d, quiet) {
+async function importData(d, quiet, stay) {
   try {
     if (d.format !== 'diagpol-1' || !d.mandat) throw new Error('Fichier non reconnu');
     let m = d.mandat;
@@ -752,7 +761,7 @@ async function importData(d, quiet) {
     if (exists) await delPhotosOf(m.id);
     for (const p of d.photos || []) await put('photos', { id: p.id, mid: m.id, blob: b64ToBlob(p.b64) });
     await put('mandats', m); S.setCurrent(null);
-    go(`#/m/${m.id}`);
+    if (!stay) go(`#/m/${m.id}`);
   } catch (e) { toast(e.message); }
 }
 
