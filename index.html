@@ -11,28 +11,32 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=17">
+<link rel="stylesheet" href="css/app.css?v=18">
 <script>
-/* Secours : si l'appli ne s'affiche pas (fichiers en cache mélangés), proposer de réparer */
+/* Secours : si l'appli ne démarre pas, afficher la cause et proposer de réparer */
 (function () {
+  var errs = [];
   function show(msg) {
-    if (window.__appOk || document.getElementById('rescue')) return;
-    var d = document.createElement('div'); d.id = 'rescue';
+    if (window.__appOk) return;
+    var d = document.getElementById('rescue');
+    if (!d) { d = document.createElement('div'); d.id = 'rescue'; document.body.appendChild(d); }
     d.style.cssText = 'position:fixed;inset:0;z-index:999;display:grid;place-items:center;padding:24px;background:#f6f6f9;font:16px Poppins,system-ui,sans-serif;text-align:center';
-    d.innerHTML = '<div><p style="font-weight:600;font-size:18px;margin:0 0 8px">Mise à jour nécessaire</p><p style="color:#6b6979;margin:0 0 16px">' + msg + '</p><button id="fix" style="min-height:48px;padding:0 22px;border:0;border-radius:14px;background:#4e4184;color:#fff;font:600 16px Poppins,system-ui,sans-serif">Réparer</button><p style="color:#6b6979;font-size:13px;margin:14px 0 0">Vos mandats sont conservés.</p></div>';
-    document.body.appendChild(d);
-    document.getElementById('fix').onclick = async function () {
-      try { var rs = await navigator.serviceWorker.getRegistrations(); for (var r of rs) await r.unregister(); } catch (e) {}
-      try { var ks = await caches.keys(); for (var k of ks) await caches.delete(k); } catch (e) {}
-      location.replace(location.pathname + '?r=' + Date.now());
+    d.innerHTML = '<div><p style="font-weight:600;font-size:18px;margin:0 0 8px">L’appli n’a pas démarré</p><p style="color:#6b6979;margin:0 0 12px">' + msg + '</p><p style="color:#d1182b;font-size:13px;margin:0 0 16px;word-break:break-word">' + errs.slice(0, 3).join('<br>') + '</p><button id="fix" style="min-height:48px;padding:0 22px;border:0;border-radius:14px;background:#4e4184;color:#fff;font:600 16px Poppins,system-ui,sans-serif">Réparer</button><p style="color:#6b6979;font-size:13px;margin:14px 0 0">Vos mandats sont conservés.</p></div>';
+    document.getElementById('fix').onclick = function () {
+      var p = [];
+      try { p.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })); } catch (e) {}
+      try { p.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (e) {}
+      Promise.all(p).catch(function () {}).then(function () { location.replace(location.pathname + '?r=' + Date.now()); });
     };
   }
-  window.addEventListener('error', function () { setTimeout(function () { show('L’appli n’a pas pu démarrer.'); }, 300); }, true);
-  setTimeout(function () { show('L’appli met trop de temps à démarrer.'); }, 5000);
+  function esc(t) { return String(t).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  window.addEventListener('error', function (e) { if (e.message) { errs.push(esc(e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''))); setTimeout(function () { show('Erreur au démarrage.'); }, 300); } });
+  window.addEventListener('unhandledrejection', function (e) { errs.push(esc(e.reason && e.reason.message || e.reason)); setTimeout(function () { show('Erreur au démarrage.'); }, 300); });
+  setTimeout(function () { show('Le démarrage prend trop de temps.'); }, 6000);
 })();
 </script>
-<script src="js/vendor/qrcode.js?v=17" defer></script>
-<script type="module" src="js/app.js?v=17"></script>
+<script src="js/vendor/qrcode.js?v=18" defer></script>
+<script type="module" src="js/app.js?v=18"></script>
 </head>
 <body>
 <header class="bar" id="bar">
@@ -40,7 +44,7 @@
   <div class="bt"><b id="title">Diagnostic polluants</b><span id="subtitle">Prototype pour Novacity</span></div>
   <span class="net" id="net" hidden>Hors ligne</span>
 </header>
-<main id="view" class="view"></main>
+<main id="view" class="view"><p class="note">Chargement…</p></main>
 <div class="sheet-bg" id="sheet-bg" hidden></div>
 <section class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

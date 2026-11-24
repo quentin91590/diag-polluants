@@ -1,6 +1,6 @@
 /* Métré par caméra (WebXR, Chrome Android avec ARCore).
    mode 'l' : longueur (2 points) · mode 's' : surface rectangulaire (3 points : A, B, C ; surface = AB × BC) */
-import { $, nf, buzz } from './util.js?v=17';
+import { $, nf, buzz } from './util.js?v=18';
 
 export async function arSupported() {
   try { return !!(navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')); }
