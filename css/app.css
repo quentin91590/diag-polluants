@@ -254,23 +254,3 @@ table.t{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
 .ph-hero{padding:0;overflow:hidden}
 .ph-hero img{display:block;width:100%;max-height:260px;object-fit:cover}
 .btn svg{flex:none}
-
-/* Maquette 3/4 d'un local */
-.stage3{position:relative;border-radius:20px;overflow:hidden;background:#f0eef5;box-shadow:0 1px 0 #fff inset,0 12px 30px -20px rgba(46,38,80,.45);user-select:none;-webkit-user-select:none}
-.stage3.mini{width:78%;margin:0 auto;border-radius:18px}
-.stage3 img{display:block;width:100%;height:100%;pointer-events:none}
-.stage3 svg{position:absolute;inset:0;width:100%;height:100%}
-.stage3 .hl{cursor:pointer;-webkit-tap-highlight-color:transparent}
-.stage3 .hl .edge,.stage3 .hl .trail{opacity:0;transition:opacity .35s}
-.stage3 .hl.on .edge,.stage3 .hl.on .trail{opacity:1}
-.stage3 .hl.on .rest{opacity:0}
-.stage3 .hl.on .tint{animation:tint3 2.4s ease-in-out infinite}
-.stage3 .hl.on .trail{animation:run3 2.6s linear infinite}
-.stage3 .hl.on .trail.t2{animation-delay:-1.3s}
-#schip{cursor:pointer}
-@keyframes run3{from{stroke-dashoffset:0}to{stroke-dashoffset:-100}}
-@keyframes tint3{0%,100%{fill-opacity:.12}50%{fill-opacity:.26}}
-.leg3{display:flex;flex-wrap:wrap;gap:12px;font-size:11.5px;color:var(--mute)}
-.leg3 i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:-1px}
-.leg3 i.d{background:#fff;border:1.2px dashed #4e4184}
-@media (prefers-reduced-motion:reduce){.stage3 .hl.on .trail,.stage3 .hl.on .tint{animation:none}}

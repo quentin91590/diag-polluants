@@ -79,8 +79,6 @@ export const TYPES = {
 };
 
 /* Diagnostiqueurs proposés (liste à compléter) */
-/* Maquette 3/4 par type de local (scenes/<slug>.jpg + .json) */
-export const SCENES = { 'Salle de bain': 'salle-de-bain', 'Cuisine': 'cuisine', 'Séjour / chambre': 'sejour', 'Hall / escalier': 'hall', 'Chaufferie': 'chaufferie', 'Cave / sous-sol': 'cave', 'Local technique / électrique': 'local-technique', 'Combles': 'combles', 'Façade': 'facade', 'Toiture': 'toiture', 'Autre': 'autre' };
 export const DIAGNOSTIQUEURS = ['Auditeur 1'];
 
 export const NIVEAUX = ['Sous-sol', 'Rez', '1er', '2e', '3e', '4e', '5e', 'Combles', 'Extérieur'];
