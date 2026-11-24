@@ -11,9 +11,28 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css">
-<script src="js/vendor/qrcode.js" defer></script>
-<script type="module" src="js/app.js"></script>
+<link rel="stylesheet" href="css/app.css?v=17">
+<script>
+/* Secours : si l'appli ne s'affiche pas (fichiers en cache mélangés), proposer de réparer */
+(function () {
+  function show(msg) {
+    if (window.__appOk || document.getElementById('rescue')) return;
+    var d = document.createElement('div'); d.id = 'rescue';
+    d.style.cssText = 'position:fixed;inset:0;z-index:999;display:grid;place-items:center;padding:24px;background:#f6f6f9;font:16px Poppins,system-ui,sans-serif;text-align:center';
+    d.innerHTML = '<div><p style="font-weight:600;font-size:18px;margin:0 0 8px">Mise à jour nécessaire</p><p style="color:#6b6979;margin:0 0 16px">' + msg + '</p><button id="fix" style="min-height:48px;padding:0 22px;border:0;border-radius:14px;background:#4e4184;color:#fff;font:600 16px Poppins,system-ui,sans-serif">Réparer</button><p style="color:#6b6979;font-size:13px;margin:14px 0 0">Vos mandats sont conservés.</p></div>';
+    document.body.appendChild(d);
+    document.getElementById('fix').onclick = async function () {
+      try { var rs = await navigator.serviceWorker.getRegistrations(); for (var r of rs) await r.unregister(); } catch (e) {}
+      try { var ks = await caches.keys(); for (var k of ks) await caches.delete(k); } catch (e) {}
+      location.replace(location.pathname + '?r=' + Date.now());
+    };
+  }
+  window.addEventListener('error', function () { setTimeout(function () { show('L’appli n’a pas pu démarrer.'); }, 300); }, true);
+  setTimeout(function () { show('L’appli met trop de temps à démarrer.'); }, 5000);
+})();
+</script>
+<script src="js/vendor/qrcode.js?v=17" defer></script>
+<script type="module" src="js/app.js?v=17"></script>
 </head>
 <body>
 <header class="bar" id="bar">
