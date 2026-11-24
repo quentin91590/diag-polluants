@@ -42,6 +42,8 @@ html[data-dir=fwd]::view-transition-old(root){animation-name:outL}
 html[data-dir=fwd]::view-transition-new(root){animation-name:inR}
 html[data-dir=back]::view-transition-old(root){animation-name:outR}
 html[data-dir=back]::view-transition-new(root){animation-name:inL}
+::view-transition-group(bar),::view-transition-old(bar),::view-transition-new(bar){animation:none}
+::view-transition-old(bar){display:none}
 @keyframes outL{to{opacity:0;transform:translateX(-24px)}}
 @keyframes inR{from{opacity:0;transform:translateX(32px)}}
 @keyframes outR{to{opacity:0;transform:translateX(24px)}}
@@ -130,6 +132,10 @@ textarea.in{min-height:88px;resize:vertical}
 .li .tx b{font-weight:600}
 .li .tx span{font-size:13px;color:var(--mute)}
 .li .chev{color:#b6b3c4;flex:none}
+.lirow{display:flex;gap:8px;align-items:stretch}
+.lirow .li{flex:1;min-width:0}
+.li-x{flex:none;width:52px;border:0;border-radius:16px;background:#fff;box-shadow:var(--sh);color:var(--pos);display:grid;place-items:center;cursor:pointer;transition:transform .15s var(--ease),background .2s}
+.li-x:active{transform:scale(.92);background:#fdecee}
 .grp{font-size:12.5px;font-weight:600;color:var(--mute);margin:6px 4px -2px}
 
 /* Étapes du mandat */

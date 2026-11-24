@@ -1,7 +1,7 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=110';
-import { put, get, del, photosOf } from './db.js?v=110';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=110';
-import * as S from './store.js?v=110';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=111';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=111';
+import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=111';
+import * as S from './store.js?v=111';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -47,7 +47,8 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.10';
+const APP_V = '1.11';
+const DEMO = 'immeuble-test';
 /* Pas de service worker pour l'instant : on retire ceux des anciennes versions */
 if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
 if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
@@ -81,15 +82,26 @@ async function home() {
   const ms = await S.list();
   view.innerHTML = `
   <div class="hero"><p class="kick">Mandats</p><h1>Diagnostics</h1></div>
-  ${ms.length ? `<div class="list">${ms.map(m => { const st = S.stage(m); return `<a class="li" href="#/m/${m.id}"><div class="tx"><b>${esc(S.adresse(m) || 'Nouveau mandat')}</b><span>${esc(m.info.typeDiag)} · ${esc(st.txt)}</span></div><span class="pill ${st.n === 7 ? 'ok' : ''}">${st.n}/7</span><svg class="chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></a>`; }).join('')}</div>`
+  ${ms.length ? `<div class="list">${ms.map(m => { const st = S.stage(m); return `<div class="lirow"><a class="li" href="#/m/${m.id}"><div class="tx"><b>${esc(S.adresse(m) || 'Nouveau mandat')}</b><span>${esc(m.info.typeDiag)} · ${esc(st.txt)}</span></div><span class="pill ${st.n === 7 ? 'ok' : ''}">${st.n}/7</span></a><button class="li-x" data-act="del" data-id="${m.id}" type="button" aria-label="Supprimer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>`; }).join('')}</div>`
     : `<div class="card"><h2>Aucun mandat</h2><p class="muted">Créez votre premier diagnostic.</p></div>`}
+  ${ms.some(m => m.id === DEMO) ? '' : `<button class="btn soft wide" data-act="demo" type="button">Charger l’immeuble test</button>`}
   <p class="note">Données enregistrées sur cet appareil. Exportez vos mandats pour les sauvegarder.</p>
   <div class="actions"><button class="btn" data-act="imp" type="button">Importer</button><button class="btn pri" data-act="new" type="button">Nouveau mandat</button></div>
   <input type="file" id="impf" accept=".json,application/json" hidden>`;
   stagger();
   bind({
     new: async () => { const m = S.newMandat(); S.setCurrent(m); await save(m); go(`#/m/${m.id}/prep`); },
-    imp: () => $('#impf').click()
+    imp: () => $('#impf').click(),
+    demo: async b => {
+      b.disabled = true; b.textContent = 'Chargement…';
+      try { const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable'); await importData(await r.json(), true); }
+      catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Charger l’immeuble test'; }
+    },
+    del: async b => {
+      const m = ms.find(x => x.id === b.dataset.id); if (!m) return;
+      if (!await confirmSheet('Supprimer le mandat ?', `${S.adresse(m) || 'Nouveau mandat'} et ses photos seront effacés de cet appareil.`, 'Supprimer', true)) return;
+      await S.remove(m.id); buzz(20); refresh();
+    }
   });
   $('#impf').onchange = async e => { const f = e.target.files[0]; if (f) await importJson(f); };
 }
@@ -650,7 +662,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=110'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=111'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },
@@ -679,12 +691,15 @@ async function exportJson(m) {
   
 }
 async function importJson(file) {
+  try { await importData(JSON.parse(await file.text())); } catch (e) { toast(e.message); }
+}
+async function importData(d, quiet) {
   try {
-    const d = JSON.parse(await file.text());
     if (d.format !== 'diagpol-1' || !d.mandat) throw new Error('Fichier non reconnu');
     let m = d.mandat;
     const exists = await get('mandats', m.id);
-    if (exists && !await confirmSheet('Mandat déjà présent', 'Remplacer la version de cet appareil ?', 'Remplacer', true)) return;
+    if (exists && !quiet && !await confirmSheet('Mandat déjà présent', 'Remplacer la version de cet appareil ?', 'Remplacer', true)) return;
+    if (exists) await delPhotosOf(m.id);
     for (const p of d.photos || []) await put('photos', { id: p.id, mid: m.id, blob: b64ToBlob(p.b64) });
     await put('mandats', m); S.setCurrent(null);
     go(`#/m/${m.id}`);
