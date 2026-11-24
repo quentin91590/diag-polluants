@@ -1,6 +1,6 @@
 import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js';
 import { put, get, del, photosOf } from './db.js';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES } from './ref.js';
+import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js';
 import * as S from './store.js';
 import { arSupported, measure } from './ar.js';
 
@@ -48,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.4';
+const APP_V = '1.5';
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const had = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
@@ -150,7 +150,7 @@ async function prep(id) {
     <div class="f"><span>Type de diagnostic</span>${chips('type', ['Avant travaux', 'Utilisation normale', 'Après travaux'], I.typeDiag)}</div>
     <label class="f"><span>Travaux annoncés</span><textarea class="in" data-f="travaux" rows="3">${esc(I.travaux)}</textarea></label>
     ${f('proprietaire', 'Mandant')}
-    <div class="grid2">${f('diagnostiqueur', 'Diagnostiqueur')}${f('dateVisite', 'Date de visite', 'date')}</div>
+    <div class="grid2"><label class="f"><span>Diagnostiqueur</span><select class="in" data-f="diagSel">${[...new Set([...DIAGNOSTIQUEURS, I.diagnostiqueur].filter(Boolean))].map(n => `<option ${n === I.diagnostiqueur ? 'selected' : ''}>${esc(n)}</option>`).join('')}<option value="__autre">Autre…</option></select></label>${f('dateVisite', 'Date de visite', 'date')}</div>
     <label class="check"><input type="checkbox" data-f="volume200" ${I.volume200 ? 'checked' : ''}><span>Plus de 200 m³ de déchets de chantier<br><span class="small muted">Plan d’élimination obligatoire (OLED art. 16)</span></span></label>
   </section>
   <section class="card"><div class="row between"><h2>Polluants</h2><button class="btn sm ghost" data-act="prop" type="button">Proposer</button></div>
@@ -176,6 +176,14 @@ async function prep(id) {
   }, async (k, el, ev) => {
     if (k.startsWith('pol:')) { m.pol[k.slice(4)] = el.checked; S.reopenFrom(m, 1, 'polluants modifiés'); await save(m); refresh(); return; }
     if (k === 'volume200') { I.volume200 = el.checked; await save(m); refresh(); return; }
+    if (k === 'diagSel') {
+      let n = el.value;
+      if (n === '__autre') {
+        n = await sheet(`<h2>Diagnostiqueur</h2><input class="in" id="dnom" placeholder="Prénom Nom"><div class="row"><button class="btn grow" data-close="" type="button">Annuler</button><button class="btn pri grow" id="dok" type="button">Ajouter</button></div>`, (sh, close) => { $('#dok', sh).onclick = () => close($('#dnom', sh).value.trim()); setTimeout(() => $('#dnom', sh).focus(), 300); });
+        if (!n) { refresh(); return; }
+      }
+      I.diagnostiqueur = n; S.setLastDiag(n); await save(m); refresh(); return;
+    }
     if (k === 'adresse') { I.adresse = el.value; if (ev === 'input') suggest(el.value); else await save(m); return; }
     I[k] = el.value;
     if (k === 'annee' && ev === 'change') { S.reopenFrom(m, 1, 'année modifiée'); }

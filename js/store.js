@@ -1,6 +1,6 @@
 import { get, put, getAll, del, delPhotosOf } from './db.js';
 import { uid, nowIso, pad } from './util.js';
-import { MAT, POL, checklistFor, POL_KEYS, SEUILS, SUVA } from './ref.js';
+import { MAT, POL, checklistFor, POL_KEYS, SEUILS, SUVA, DIAGNOSTIQUEURS } from './ref.js';
 
 let cur = null;
 
@@ -30,10 +30,12 @@ function migrate(m) {
   m.families.forEach(f => { if (f.dec.suva == null) f.dec.suva = ''; });
 }
 
+export function lastDiag() { try { return localStorage.getItem('diagpol-diag') || DIAGNOSTIQUEURS[0]; } catch (e) { return DIAGNOSTIQUEURS[0]; } }
+export function setLastDiag(n) { try { localStorage.setItem('diagpol-diag', n); } catch (e) { /* rien */ } }
 export function newMandat() {
   return {
     id: uid(), createdAt: nowIso(), updatedAt: nowIso(), version: 1, locked: false,
-    info: { canton: 'GE', volume200: false, adresse: '', rue: '', npa: '', commune: '', egid: '', annee: '', niveaux: '', logements: '', typeDiag: 'Avant travaux', travaux: '', proprietaire: '', diagnostiqueur: '', dateVisite: new Date().toISOString().slice(0, 10) },
+    info: { canton: 'GE', volume200: false, adresse: '', rue: '', npa: '', commune: '', egid: '', annee: '', niveaux: '', logements: '', typeDiag: 'Avant travaux', travaux: '', proprietaire: '', diagnostiqueur: lastDiag(), dateVisite: new Date().toISOString().slice(0, 10) },
     pol: { A: true, PCB: true, Pb: true, HAP: true, HBCD: false },
     cp: {}, locaux: [], samples: [], results: {}, unmatched: [], families: [],
     cfst: { override: '' }, rapport: { conclusion: '', risques: '', relu: false, signe: null },

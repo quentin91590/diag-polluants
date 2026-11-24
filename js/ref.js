@@ -78,6 +78,9 @@ export const TYPES = {
   'Autre': ['enduit', 'peinture', 'sol-dalle']
 };
 
+/* Diagnostiqueurs proposés (liste à compléter) */
+export const DIAGNOSTIQUEURS = ['Nans Gallier'];
+
 export const NIVEAUX = ['Sous-sol', 'Rez', '1er', '2e', '3e', '4e', '5e', 'Combles', 'Extérieur'];
 export const ZONES = ['Sol', 'Plafond', 'Paroi A', 'Paroi B', 'Paroi C', 'Paroi D', 'Installation', 'Autre'];
 export const ETATS = ['Bon', 'Dégradé', 'Très dégradé'];
