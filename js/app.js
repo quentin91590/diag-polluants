@@ -1,6 +1,6 @@
 import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js';
 import { put, get, del, photosOf } from './db.js';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes } from './ref.js';
+import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES } from './ref.js';
 import * as S from './store.js';
 import { arSupported, measure } from './ar.js';
 
@@ -15,7 +15,7 @@ const routes = [
   [/^#\/?$/, home], [/^#\/m\/([^/]+)$/, dash], [/^#\/m\/([^/]+)\/prep$/, prep], [/^#\/m\/([^/]+)\/locaux$/, locaux],
   [/^#\/m\/([^/]+)\/l\/([^/]+)$/, local], [/^#\/m\/([^/]+)\/l\/([^/]+)\/i\/([^/]+)$/, item], [/^#\/m\/([^/]+)\/fin$/, fin],
   [/^#\/m\/([^/]+)\/labo$/, labo], [/^#\/m\/([^/]+)\/etiquettes$/, etiquettes], [/^#\/m\/([^/]+)\/strat$/, strat],
-  [/^#\/m\/([^/]+)\/synth$/, synth], [/^#\/m\/([^/]+)\/rapport$/, rapport]
+  [/^#\/m\/([^/]+)\/synth$/, synth], [/^#\/m\/([^/]+)\/rapport$/, rapport], [/^#\/m\/([^/]+)\/mesures$/, mesures]
 ];
 const depth = h => h.split('/').filter(Boolean).length;
 function parent(h) {
@@ -108,6 +108,8 @@ async function dash(id) {
   ];
   view.innerHTML = `
   <div class="steps">${st.map((s, i) => `<a class="li step ${s.done ? 'done' : ''} ${s.lock ? 'lock' : ''}" href="${s.lock ? '#' : `#/m/${id}/${s.h}`}" ${s.lock ? `data-act="lock" data-n="${s.lock}"` : ''}><span class="dot">${s.done ? '✓' : i + 1}</span><div class="tx"><b>${s.t}</b><span>${esc(s.s)}</span>${s.p != null && nl ? `<div class="prog"><i style="width:${Math.round(s.p * 100)}%"></i></div>` : ''}</div><svg class="chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></a>`).join('')}</div>
+  <a class="li" href="#/m/${id}/mesures"><div class="tx"><b>Mesures</b><span>Libération des zones · PCB dans l’air</span></div><span class="pill">${m.mesures.zones.length + m.mesures.pcb.length}</span></a>
+  <details class="card"><summary><b>Cadre réglementaire</b></summary><div class="list">${BASES.map(([k, v]) => `<div class="small"><b>${esc(k)}</b> · ${esc(v)}</div>`).join('')}</div></details>
   <div class="row"><a class="btn sm soft" href="#/m/${id}/etiquettes">Étiquettes</a><button class="btn sm soft" data-act="exp" data-keep type="button">Exporter</button><button class="btn sm danger" data-act="delm" data-keep type="button">Supprimer</button></div>`;
   stagger();
   bind({
@@ -121,26 +123,30 @@ async function dash(id) {
 async function prep(id) {
   const m = await mand(id); const I = m.info;
   head('Préparation', S.adresse(m) || 'Nouveau mandat');
-  const prop = polluantsProposes(I.annee);
+  const prop = polluantsProposes(I.annee, I.canton);
+  const C = CANTONS[I.canton] || CANTONS.CH;
+  const oblig = I.annee ? Number(I.annee) < C.seuil : null;
   const checks = [
-    { ok: !!(I.rue && I.commune), txt: 'Adresse' }, { ok: !!I.annee, txt: 'Année de construction' },
+    { ok: !!(I.adresse || (I.rue && I.commune)), txt: 'Adresse' }, { ok: !!I.annee, txt: 'Année de construction' },
     { ok: !!I.travaux.trim(), txt: 'Travaux annoncés' }, { ok: POL_KEYS.some(k => m.pol[k]), txt: 'Polluants recherchés' },
     { ok: !!I.diagnostiqueur.trim(), txt: 'Diagnostiqueur' }
   ];
   const f = (k, lab, type = 'text', extra = '') => `<label class="f"><span>${lab}</span><input class="in" data-f="${k}" type="${type}" value="${esc(I[k])}" ${extra}></label>`;
   view.innerHTML = `
   <section class="card"><h2>Bâtiment</h2>
-    ${f('rue', 'Rue et n°', 'text', 'autocomplete="street-address"')}
-    <div class="grid2">${f('npa', 'NPA', 'text', 'inputmode="numeric"')}${f('commune', 'Commune')}</div>
-    <button class="btn soft" data-act="regbl" type="button">Remplir depuis le RegBL</button>
+    <div class="f"><span>Canton</span>${chips('canton', Object.keys(CANTONS).map(k => CANTONS[k].n), C.n)}</div>
+    <label class="f"><span>Adresse</span><input class="in" data-f="adresse" id="adr" type="search" autocomplete="off" placeholder="Tapez l’adresse (ex. Rue de Veyrier 13 Carouge)" value="${esc(I.adresse || S.adresse(m))}"></label>
+    <div class="sug" id="sug" hidden></div>
     <div class="grid2">${f('egid', 'EGID', 'text', 'inputmode="numeric"')}${f('annee', 'Année de construction', 'text', 'inputmode="numeric"')}</div>
     <div class="grid2">${f('niveaux', 'Niveaux')}${f('logements', 'Logements', 'text', 'inputmode="numeric"')}</div>
+    ${oblig === null ? '' : `<p class="${oblig ? 'warnbox' : 'note'}">${oblig ? `Diagnostic exigé : construit avant ${C.seuil} (${esc(C.ref)}).` : `Construit en ${esc(I.annee)} ou après ${C.seuil} : diagnostic non exigé par le canton.`}</p>`}
   </section>
   <section class="card"><h2>Mandat</h2>
     <div class="f"><span>Type de diagnostic</span>${chips('type', ['Avant travaux', 'Utilisation normale', 'Après travaux'], I.typeDiag)}</div>
     <label class="f"><span>Travaux annoncés</span><textarea class="in" data-f="travaux" rows="3">${esc(I.travaux)}</textarea></label>
     ${f('proprietaire', 'Mandant')}
     <div class="grid2">${f('diagnostiqueur', 'Diagnostiqueur')}${f('dateVisite', 'Date de visite', 'date')}</div>
+    <label class="check"><input type="checkbox" data-f="volume200" ${I.volume200 ? 'checked' : ''}><span>Plus de 200 m³ de déchets de chantier<br><span class="small muted">Plan d’élimination obligatoire (OLED art. 16)</span></span></label>
   </section>
   <section class="card"><div class="row between"><h2>Polluants</h2><button class="btn sm ghost" data-act="prop" type="button">Proposer</button></div>
     ${POL_KEYS.map(k => `<label class="check"><input type="checkbox" data-f="pol:${k}" ${m.pol[k] ? 'checked' : ''}><span><b>${POL[k].n}</b><br><span class="small muted">${esc(prop[k].why)}</span></span></label>`).join('')}
@@ -151,35 +157,56 @@ async function prep(id) {
   let t;
   bind({
     type: async b => { I.typeDiag = b.dataset.v; await save(m); refresh(); },
-    prop: async () => { const p = polluantsProposes(I.annee); POL_KEYS.forEach(k => { m.pol[k] = p[k].on; }); S.reopenFrom(m, 1, 'polluants modifiés'); await save(m); refresh(); toast('Polluants proposés'); },
-    regbl: async b => {
-      b.disabled = true; b.textContent = 'Recherche…';
-      try { await regbl(m); await save(m); toast('Données RegBL ajoutées'); refresh(); }
-      catch (e) { toast(e.message || 'RegBL indisponible'); b.disabled = false; b.textContent = 'Remplir depuis le RegBL'; }
+    canton: async b => { I.canton = Object.keys(CANTONS).find(k => CANTONS[k].n === b.dataset.v) || 'CH'; S.reopenFrom(m, 1, 'canton modifié'); await save(m); refresh(); },
+    prop: async () => { const p = polluantsProposes(I.annee, I.canton); POL_KEYS.forEach(k => { m.pol[k] = p[k].on; }); S.reopenFrom(m, 1, 'polluants modifiés'); await save(m); refresh(); toast('Polluants proposés'); },
+    pick: async b => {
+      $('#sug').hidden = true;
+      $('#adr').value = b.dataset.label;
+      I.adresse = b.dataset.label;
+      try { await regbl(m, b.dataset.fid); toast('RegBL : bâtiment trouvé'); }
+      catch (e) { toast(e.message || 'RegBL indisponible'); }
+      await save(m); refresh();
     },
     ok: async () => { S.validate(m, 1, 'Préparation validée'); buzz(25); await save(m); refresh(); toast('Préparation validée'); }
   }, async (k, el, ev) => {
     if (k.startsWith('pol:')) { m.pol[k.slice(4)] = el.checked; S.reopenFrom(m, 1, 'polluants modifiés'); await save(m); refresh(); return; }
+    if (k === 'volume200') { I.volume200 = el.checked; await save(m); refresh(); return; }
+    if (k === 'adresse') { I.adresse = el.value; if (ev === 'input') suggest(el.value); else await save(m); return; }
     I[k] = el.value;
     if (k === 'annee' && ev === 'change') { S.reopenFrom(m, 1, 'année modifiée'); }
     clearTimeout(t); t = setTimeout(async () => { await save(m); if (ev === 'change') refresh(); }, 250);
   });
 }
 
-async function regbl(m) {
-  const q = [m.info.rue, m.info.npa, m.info.commune].filter(Boolean).join(' ');
-  if (!q) throw new Error('Saisissez l’adresse');
-  const r = await fetch(`https://api3.geo.admin.ch/rest/services/ech/SearchServer?searchText=${encodeURIComponent(q)}&type=locations&origins=address&limit=1`).then(r => r.json());
-  const a = r.results && r.results[0];
-  if (!a) throw new Error('Adresse introuvable');
-  const fid = a.attrs.featureId;
+let sugT, sugN = 0;
+function suggest(q) {
+  clearTimeout(sugT);
+  const box = $('#sug');
+  if (!box) return;
+  if (q.trim().length < 3) { box.hidden = true; return; }
+  sugT = setTimeout(async () => {
+    const n = ++sugN;
+    try {
+      const r = await fetch(`https://api3.geo.admin.ch/rest/services/ech/SearchServer?searchText=${encodeURIComponent(q)}&type=locations&origins=address&limit=6`).then(r => r.json());
+      if (n !== sugN || !$('#sug')) return;
+      const res = (r.results || []).filter(x => x.attrs && x.attrs.featureId);
+      box.innerHTML = res.length ? res.map(x => { const label = x.attrs.label.replace(/<[^>]*>/g, ''); return `<button type="button" data-act="pick" data-fid="${esc(x.attrs.featureId)}" data-label="${esc(label)}">${esc(label)}</button>`; }).join('') : '<p class="small muted">Aucune adresse trouvée</p>';
+      box.hidden = false;
+    } catch (e) { box.innerHTML = '<p class="small muted">Recherche indisponible (hors ligne ?)</p>'; box.hidden = false; }
+  }, 280);
+}
+async function regbl(m, fid) {
   const g = await fetch(`https://api3.geo.admin.ch/rest/services/ech/MapServer/ch.bfs.gebaeude_wohnungs_register/${encodeURIComponent(fid)}?returnGeometry=false&lang=fr`).then(r => r.json());
   const at = (g.feature && (g.feature.attributes || g.feature.properties)) || {};
-  if (at.egid) m.info.egid = String(at.egid);
-  if (at.gbauj) { m.info.annee = String(at.gbauj); S.reopenFrom(m, 1, 'année modifiée'); }
+  m.info.egid = String(at.egid || String(fid).split('_')[0]);
+  if (at.strname) m.info.rue = [at.strname, at.deinr].filter(Boolean).join(' ');
+  if (at.dplz4) m.info.npa = String(at.dplz4);
+  if (at.ggdename) m.info.commune = at.ggdename;
+  if (at.gdekt) m.info.canton = CANTONS[at.gdekt] ? at.gdekt : 'CH';
+  if (at.gbauj && String(at.gbauj) !== m.info.annee) { m.info.annee = String(at.gbauj); S.reopenFrom(m, 1, 'année modifiée'); }
   if (at.gastw) m.info.niveaux = String(at.gastw);
   if (at.ganzwhg) m.info.logements = String(at.ganzwhg);
-  if (!at.egid) throw new Error('Bâtiment trouvé, sans données RegBL');
+  if (!at.gbauj) throw new Error('Année de construction absente du RegBL : à saisir');
 }
 
 /* ---------- Locaux ---------- */
@@ -467,6 +494,13 @@ async function etiquettes(id) {
 }
 
 /* ---------- Stratégie (PC 5) ---------- */
+function famReady(f, i) {
+  if (Object.values(i.st).some(v => v.s === 'conf' || v.s === 'wait')) return false;
+  if (!i.polluee) return true;
+  if (!f.dec.mesure || !f.dec.filiere || f.dec.filiere === 'À définir') return false;
+  if (S.isAmiante(i) && (!f.dec.urgence || !f.dec.suva)) return false;
+  return true;
+}
 async function strat(id) {
   const m = await mand(id);
   if (!m.cp[4]) { toast('Validez les résultats du labo'); go(`#/m/${id}/labo`); return; }
@@ -478,19 +512,22 @@ async function strat(id) {
   view.innerHTML = `
   <details class="card"><summary><b>Règles appliquées</b></summary><ol class="small">${REGLES.map(r => `<li>${esc(r)}</li>`).join('')}</ol></details>
   ${F.map(({ f, i }) => {
-    const prop = S.urgenceProposee(i.pire);
     const hasConf = Object.values(i.st).some(v => v.s === 'conf');
+    const am = S.isAmiante(i);
+    const fp = S.filiereProposee(f, i);
+    const sp = S.suvaPropose(f);
     return `<section class="card fam ${f.dec.ok ? 'ok' : ''}">
       <div class="hd"><div><b>${f.id} · ${esc(f.nom)}</b><p class="small muted">${i.locs.length} local(aux) · ${Object.entries(i.qty).map(([u, q]) => `${nf(q)} ${u}`).join(' + ') || 'quantité ?'}${i.pire ? ' · état ' + i.pire.toLowerCase() : ''}</p></div>${f.dec.ok ? '<span class="pill ok">Validée</span>' : ''}</div>
-      <div class="pls">${Object.entries(i.st).map(([p, v]) => `<span class="pill ${v.s}">${POL[p].n} : ${S.STLAB[v.s]}${v.s === 'pos' && v.ext ? ` (${v.det} analysé, ${v.ext} étendu)` : ''}</span>`).join('')}</div>
+      <div class="pls">${Object.entries(i.st).map(([p, v]) => `<span class="pill ${v.s}">${POL[p].n} : ${S.STLAB[v.s]}${v.s === 'pos' && v.ext ? ` (${v.det} analysé, ${v.ext} étendu)` : ''}${v.vmax != null ? ` · ${nf(v.vmax)}` : ''}</span>`).join('')}</div>
       <p class="small muted">${i.locs.map(l => `${esc(l.niveau)} · ${esc(l.nom)}`).join(' / ')}</p>
       ${hasConf || f.dec.identite != null ? `<div class="f"><span>Non détecté : matériaux identiques ?</span><div class="chips"><button type="button" class="chip c-neg ${f.dec.identite === true ? 'on' : ''}" data-act="ident" data-f2="${f.id}" data-v="1">Oui, étendre</button><button type="button" class="chip c-pos ${f.dec.identite === false ? 'on' : ''}" data-act="ident" data-f2="${f.id}" data-v="0">Non, présumer</button></div></div>` : ''}
-      ${i.polluee ? `<div class="f"><span>Urgence (proposée : ${prop})</span><div class="chips">${DECISIONS.urgence.slice(0, 3).map(u => `<button type="button" class="chip ${f.dec.urgence === u ? 'on' : ''}" data-act="urg" data-f2="${f.id}" data-v="${u}">${u}</button>`).join('')}</div></div>
-        <label class="f"><span>Mesure</span><select class="in" data-f="mesure:${f.id}"><option value="">Choisir…</option>${DECISIONS.mesure.map(x => `<option ${x === f.dec.mesure ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-        <label class="f"><span>Filière des déchets</span><select class="in" data-f="filiere:${f.id}">${DECISIONS.filiere.map(x => `<option ${x === f.dec.filiere ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-        ${i.st.A ? `<label class="check"><input type="checkbox" data-f="fc:${f.id}" ${f.fc ? 'checked' : ''}><span>Fibrociment ou bitume de toiture</span></label>` : ''}` : ''}
+      ${am ? `<div class="f"><span>Urgence (FACH 2891)</span><div class="chips">${Object.keys(URGENCE).map(u => `<button type="button" class="chip ${f.dec.urgence === u ? 'on' : ''}" data-act="urg" data-f2="${f.id}" data-v="${u}">${u}</button>`).join('')}</div>${f.dec.urgence ? `<p class="small muted">${esc(URGENCE[f.dec.urgence])}</p>` : ''}</div>
+        <div class="f"><span>Code Suva (CFST 6503)${sp ? ` · proposé : ${SUVA[sp].n.toLowerCase()}` : ''}</span><div class="chips">${Object.entries(SUVA).map(([k, v]) => `<button type="button" class="chip ${k === 'rouge' ? 'c-pos' : ''} ${f.dec.suva === k ? 'on' : ''}" data-act="suva" data-f2="${f.id}" data-v="${k}">${v.n}</button>`).join('')}</div>${f.dec.suva ? `<p class="small muted">${esc(SUVA[f.dec.suva].t)}</p>` : ''}</div>` : ''}
+      ${i.polluee ? `<label class="f"><span>Mesure</span><select class="in" data-f="mesure:${f.id}"><option value="">Choisir…</option>${DECISIONS.mesure.map(x => `<option ${x === f.dec.mesure ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+        <label class="f"><span>Filière des déchets (OLED)${fp ? ` · proposée : ${esc(fp.f)}` : ''}</span><select class="in" data-f="filiere:${f.id}">${DECISIONS.filiere.map(x => `<option ${x === f.dec.filiere ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>${fp ? `<span class="small muted">${esc(fp.why)}</span>` : ''}</label>
+        ${am ? `<label class="check"><input type="checkbox" data-f="fc:${f.id}" ${f.fc ? 'checked' : ''}><span>Fibrociment ou bitume de toiture</span></label>` : ''}` : ''}
       <label class="f"><span>Remarque</span><input class="in" data-f="rem:${f.id}" value="${esc(f.dec.remarque)}"></label>
-      <button class="btn ${f.dec.ok ? '' : 'soft'}" data-act="fok" data-f2="${f.id}" type="button" ${hasConf || (i.polluee && (!f.dec.urgence || !f.dec.mesure)) ? 'disabled' : ''}>${f.dec.ok ? 'Annuler la validation' : 'Valider la famille'}</button>
+      <button class="btn ${f.dec.ok ? '' : 'soft'}" data-act="fok" data-f2="${f.id}" type="button" ${f.dec.ok || famReady(f, i) ? '' : 'disabled'}>${f.dec.ok ? 'Annuler la validation' : 'Valider la famille'}</button>
     </section>`;
   }).join('')}
   ${!F.length ? '<div class="card"><p class="muted">Aucune famille : aucun matériau prélevé ou présumé.</p></div>' : ''}
@@ -502,10 +539,16 @@ async function strat(id) {
   bind({
     ident: async b => { const f = fam(b.dataset.f2); f.dec.identite = b.dataset.v === '1'; dirty(f, 'identité modifiée'); S.log(m, 5, f.id, f.dec.identite ? 'Non détecté étendu aux matériaux identiques' : 'Traité comme présumé'); await save(m); refresh(); },
     urg: async b => { const f = fam(b.dataset.f2); f.dec.urgence = b.dataset.v; dirty(f, 'urgence modifiée'); await save(m); refresh(); },
+    suva: async b => {
+      const f = fam(b.dataset.f2); f.dec.suva = b.dataset.v;
+      if (b.dataset.v === 'rouge' && !f.dec.mesure) f.dec.mesure = DECISIONS.mesure[0];
+      if (b.dataset.v === 'orange' && !f.dec.mesure) f.dec.mesure = DECISIONS.mesure[1];
+      dirty(f, 'code Suva modifié'); await save(m); refresh();
+    },
     fok: async b => {
       const f = fam(b.dataset.f2);
       if (f.dec.ok) { f.dec.ok = null; S.reopenFrom(m, 5, 'famille rouverte'); }
-      else { f.dec.ok = { at: nowIso(), by: S.expert(m) }; S.log(m, 5, f.id, `Décision validée${f.dec.urgence ? ' · urgence ' + f.dec.urgence : ''}${f.dec.mesure ? ' · ' + f.dec.mesure : ''}`); buzz(); }
+      else { f.dec.ok = { at: nowIso(), by: S.expert(m) }; S.log(m, 5, f.id, ['Décision validée', f.dec.urgence && 'urgence ' + f.dec.urgence, f.dec.suva && 'code ' + SUVA[f.dec.suva].n.toLowerCase(), f.dec.mesure, f.dec.filiere].filter(Boolean).join(' · ')); buzz(); }
       await save(m); refresh();
     },
     ok: async () => { S.validate(m, 5, 'Stratégie validée'); buzz(25); await save(m); toast('Stratégie validée'); refresh(); }
@@ -514,6 +557,51 @@ async function strat(id) {
     if (what === 'fc') { f.fc = el.checked; dirty(f, 'type de matériau modifié'); await save(m); refresh(); return; }
     if (what === 'rem') { f.dec.remarque = el.value; if (ev === 'change') await save(m); return; }
     f.dec[what] = el.value; dirty(f, what + ' modifiée'); await save(m); refresh();
+  });
+}
+
+/* ---------- Mesures : libération des zones (FACH 2955) et PCB dans l'air (OFSP) ---------- */
+async function mesures(id) {
+  const m = await mand(id);
+  head('Mesures', S.adresse(m));
+  const Z = m.mesures.zones, P = m.mesures.pcb;
+  const zv = z => !z.visuel ? 'À contrôler' : z.visuel === 'nc' ? 'Contrôle visuel non conforme' : z.conf && (z.far === '' || z.far == null) ? 'Mesure VDI 3492 manquante' : z.conf && Number(z.far) >= SEUILS.liberation ? `≥ ${SEUILS.liberation} FAR/m³ : non libérable` : 'Libérable';
+  const zok = z => zv(z) === 'Libérable';
+  const pv = q => q.val === '' || q.val == null ? null : Number(String(q.val).replace(',', '.')) > (q.occ === 'long' ? SEUILS.pcbAirLong : SEUILS.pcbAirJour);
+  view.innerHTML = `
+  <section class="card"><div class="row between"><h2>Libération des zones</h2><button class="btn sm soft" data-act="addz" type="button">Ajouter</button></div>
+    <p class="small muted">Après désamiantage : contrôle visuel et, sous confinement, mesure libératoire VDI 3492 (FACH 2955, CFST 6503). Seuil : ${SEUILS.liberation} FAR/m³.</p>
+    ${Z.map((z, k) => `<div class="card flat">
+      <div class="row between"><input class="in grow" data-f="z:${k}:nom" value="${esc(z.nom)}" placeholder="Zone (ex. 1er, salle de bain 1.1)"><button class="btn sm ghost" data-act="delz" data-k="${k}" type="button">Retirer</button></div>
+      <label class="check"><input type="checkbox" data-f="z:${k}:conf" ${z.conf ? 'checked' : ''}><span>Zone sous confinement</span></label>
+      <div class="f"><span>Contrôle visuel</span><div class="chips"><button type="button" class="chip c-neg ${z.visuel === 'ok' ? 'on' : ''}" data-act="vis" data-k="${k}" data-v="ok">Conforme</button><button type="button" class="chip c-pos ${z.visuel === 'nc' ? 'on' : ''}" data-act="vis" data-k="${k}" data-v="nc">Non conforme</button></div></div>
+      ${z.conf ? `<label class="f"><span>Mesure VDI 3492 (FAR/m³)</span><input class="in" inputmode="decimal" data-f="z:${k}:far" value="${esc(z.far ?? '')}"></label>` : ''}
+      <div class="row between"><span class="pill ${zok(z) ? 'neg' : z.visuel ? 'pos' : ''}">${esc(zv(z))}</span>${z.ok ? stampHtml(z.ok) : `<button class="btn sm pri" data-act="zok" data-k="${k}" type="button" ${zok(z) ? '' : 'disabled'}>Libérer</button>`}</div>
+    </div>`).join('') || '<p class="muted">Aucune zone.</p>'}
+  </section>
+  <section class="card"><div class="row between"><h2>PCB dans l’air</h2><button class="btn sm soft" data-act="addp" type="button">Ajouter</button></div>
+    <p class="small muted">Valeurs indicatives OFSP : ${SEUILS.pcbAirJour} µg/m³ (locaux occupés la journée), ${SEUILS.pcbAirLong} µg/m³ (séjour de longue durée).</p>
+    ${P.map((q, k) => `<div class="card flat">
+      <div class="row between"><input class="in grow" data-f="p:${k}:loc" value="${esc(q.loc)}" placeholder="Local mesuré"><button class="btn sm ghost" data-act="delp" data-k="${k}" type="button">Retirer</button></div>
+      <div class="chips"><button type="button" class="chip ${q.occ !== 'long' ? 'on' : ''}" data-act="occ" data-k="${k}" data-v="jour">Journée (${SEUILS.pcbAirJour})</button><button type="button" class="chip ${q.occ === 'long' ? 'on' : ''}" data-act="occ" data-k="${k}" data-v="long">Longue durée (${SEUILS.pcbAirLong})</button></div>
+      <label class="f"><span>Moyenne mesurée (µg/m³)</span><input class="in" inputmode="decimal" data-f="p:${k}:val" value="${esc(q.val ?? '')}"></label>
+      ${pv(q) === null ? '' : `<span class="pill ${pv(q) ? 'pos' : 'neg'}">${pv(q) ? 'Dépassement de la valeur indicative' : 'Sous la valeur indicative'}</span>`}
+    </div>`).join('') || '<p class="muted">Aucune mesure.</p>'}
+  </section>`;
+  stagger(); readonly(m);
+  bind({
+    addz: async () => { Z.push({ nom: '', conf: true, visuel: '', far: '', ok: null }); await save(m); refresh(); },
+    delz: async b => { Z.splice(+b.dataset.k, 1); await save(m); refresh(); },
+    vis: async b => { const z = Z[+b.dataset.k]; z.visuel = b.dataset.v; z.ok = null; await save(m); refresh(); },
+    zok: async b => { const z = Z[+b.dataset.k]; z.ok = { at: nowIso(), by: S.expert(m) }; S.log(m, 0, z.nom || 'Zone', `Zone libérée${z.conf ? ` · ${z.far} FAR/m³` : ''} · contrôle visuel conforme`); buzz(25); await save(m); refresh(); },
+    addp: async () => { P.push({ loc: '', occ: 'jour', val: '' }); await save(m); refresh(); },
+    delp: async b => { P.splice(+b.dataset.k, 1); await save(m); refresh(); },
+    occ: async b => { P[+b.dataset.k].occ = b.dataset.v; await save(m); refresh(); }
+  }, async (k, el, ev) => {
+    const [t, i, f] = k.split(':'); const o = (t === 'z' ? Z : P)[+i]; if (!o) return;
+    o[f] = el.type === 'checkbox' ? el.checked : el.value;
+    if (t === 'z' && f !== 'nom') o.ok = null;
+    if (ev === 'change') { if (t === 'p' && f === 'val') S.log(m, 0, o.loc || 'PCB air', `PCB air : ${o.val} µg/m³ (${o.occ === 'long' ? 'longue durée' : 'journée'})`); await save(m); refresh(); }
   });
 }
 
@@ -527,18 +615,20 @@ async function synth(id) {
   const tot = {}; rows.forEach(r => { if (r.cls === 'pos') tot[r.polluant] = (tot[r.polluant] || 0) + 1; });
   view.innerHTML = `
   <div class="chips">${POL_KEYS.filter(k => m.pol[k]).map(k => `<span class="pill ${tot[POL[k].n] ? 'pos' : 'neg'}">${POL[k].n} · ${tot[POL[k].n] ? tot[POL[k].n] + ' élément(s)' : 'absent'}</span>`).join('')}</div>
-  <div class="scroll card" style="padding:0"><table class="t"><thead><tr><th>Niveau</th><th>Élément</th><th>Polluant</th><th>Statut</th><th>Quantité</th><th>Urg.</th><th>Mesure</th><th>Filière</th></tr></thead><tbody>
-  ${rows.map(r => `<tr class="${r.cls}"><td class="nw">${esc(r.niveaux)}</td><td>${esc(r.element)} <span class="small muted">${r.fam}</span></td><td>${esc(r.polluant)}</td><td>${esc(r.statut)}</td><td class="n">${esc(r.qty)}</td><td>${esc(r.urgence)}</td><td>${esc(r.mesure)}</td><td>${esc(r.filiere)}</td></tr>`).join('') || '<tr><td colspan="8">Aucun élément.</td></tr>'}
+  <div class="scroll card" style="padding:0"><table class="t"><thead><tr><th>Niveau</th><th>Élément</th><th>Polluant</th><th>Statut</th><th>Quantité</th><th>Urg.</th><th>Suva</th><th>Mesure</th><th>Filière</th></tr></thead><tbody>
+  ${rows.map(r => `<tr class="${r.cls}"><td class="nw">${esc(r.niveaux)}</td><td>${esc(r.element)} <span class="small muted">${r.fam}</span></td><td>${esc(r.polluant)}</td><td>${esc(r.statut)}</td><td class="n">${esc(r.qty)}</td><td>${esc(r.urgence)}</td><td>${esc(r.suva)}</td><td>${esc(r.mesure)}</td><td>${esc(r.filiere)}</td></tr>`).join('') || '<tr><td colspan="9">Aucun élément.</td></tr>'}
   </tbody></table></div>
   <p class="small muted">Rouge : présent ou présumé · bleu : absent après analyse.</p>
   <section class="card"><h3>Protection CFST 6503</h3><p><b>Catégorie ${lvl}</b> · ${esc(S.CFST_TXT[lvl])}</p>
     <label class="f"><span>Catégorie (calculée : ${auto})</span><select class="in" data-f="cfst"><option value="">Automatique</option>${[1, 2, 3].map(n => `<option value="${n}" ${String(m.cfst.override) === String(n) ? 'selected' : ''}>Catégorie ${n}</option>`).join('')}</select></label></section>
+  <section class="card"><h3>Plan d’élimination (OLED art. 16)</h3>${m.info.volume200 ? '<p class="warnbox">Plus de 200 m³ de déchets : plan d’élimination obligatoire.</p>' : ''}
+    ${Object.entries(S.planElimination(m)).map(([k, v]) => `<div class="row between"><span><b>${esc(k)}</b> <span class="small muted">${v.fams.join(', ')}</span></span><span>${Object.entries(v.qty).map(([u, q]) => `${nf(q)} ${u}`).join(' + ') || '—'}</span></div>`).join('') || '<p class="muted">Aucun déchet pollué.</p>'}</section>
   <div class="actions"><button class="btn" data-act="csv" data-keep type="button">Exporter</button><a class="btn pri" href="#/m/${id}/rapport">Rapport</a></div>`;
   stagger(); readonly(m);
   bind({
     csv: () => {
-      const h = ['Niveau', 'Locaux', 'Élément', 'Famille', 'Polluant', 'Statut', 'Quantité', 'Urgence', 'Mesure', 'Filière'];
-      const data = rows.map(r => [r.niveaux, r.locaux, r.element, r.fam, r.polluant, r.statut, r.qty, r.urgence, r.mesure, r.filiere]);
+      const h = ['Niveau', 'Locaux', 'Élément', 'Famille', 'Polluant', 'Statut', 'Quantité', 'Urgence', 'Code Suva', 'Mesure', 'Filière'];
+      const data = rows.map(r => [r.niveaux, r.locaux, r.element, r.fam, r.polluant, r.statut, r.qty, r.urgence, r.suva, r.mesure, r.filiere]);
       download(new Blob(['﻿' + [h, ...data].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n')], { type: 'text/csv' }), 'synthese.csv');
     }
   }, async (k, el) => { m.cfst.override = el.value; S.log(m, 5, 'CFST 6503', el.value ? `Catégorie fixée à ${el.value} par l’expert` : 'Catégorie automatique'); S.reopenFrom(m, 6, 'catégorie modifiée'); await save(m); refresh(); });

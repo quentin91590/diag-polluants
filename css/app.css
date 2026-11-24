@@ -89,6 +89,14 @@ button:focus-visible,.btn:focus-visible,a:focus-visible,input:focus-visible,sele
 textarea.in{min-height:88px;resize:vertical}
 .qty{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px}
 
+/* Suggestions d'adresse */
+.sug{display:grid;margin-top:-6px;background:#fff;border:1.5px solid var(--nc-1);border-radius:var(--rs);overflow:hidden;box-shadow:var(--sh);animation:rise .25s var(--ease)}
+.sug[hidden]{display:none}
+.sug button{min-height:46px;padding:10px 12px;border:0;border-bottom:1px solid var(--line);background:#fff;text-align:left;font-size:14.5px;cursor:pointer;transition:background .15s}
+.sug button:last-child{border-bottom:0}
+.sug button:hover,.sug button:active{background:var(--nc-05)}
+.sug p{padding:10px 12px}
+
 /* Puces de choix */
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{position:relative;overflow:hidden;min-height:40px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-weight:500;font-size:14px;cursor:pointer;transition:all .2s var(--ease)}

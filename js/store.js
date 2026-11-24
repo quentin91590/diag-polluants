@@ -1,6 +1,6 @@
 import { get, put, getAll, del, delPhotosOf } from './db.js';
 import { uid, nowIso, pad } from './util.js';
-import { MAT, POL, checklistFor, POL_KEYS } from './ref.js';
+import { MAT, POL, checklistFor, POL_KEYS, SEUILS, SUVA } from './ref.js';
 
 let cur = null;
 
@@ -11,6 +11,7 @@ export async function list() {
 export async function load(id) {
   if (cur && cur.id === id) return cur;
   cur = await get('mandats', id);
+  if (cur) migrate(cur);
   return cur;
 }
 export async function save(m = cur) {
@@ -22,19 +23,25 @@ export async function remove(id) {
   if (cur && cur.id === id) cur = null;
 }
 export function setCurrent(m) { cur = m; }
+function migrate(m) {
+  m.info.canton ||= 'GE';
+  if (m.info.volume200 == null) m.info.volume200 = false;
+  m.mesures ||= { zones: [], pcb: [] };
+  m.families.forEach(f => { if (f.dec.suva == null) f.dec.suva = ''; });
+}
 
 export function newMandat() {
   return {
     id: uid(), createdAt: nowIso(), updatedAt: nowIso(), version: 1, locked: false,
-    info: { rue: '', npa: '', commune: '', egid: '', annee: '', niveaux: '', logements: '', typeDiag: 'Avant travaux', travaux: '', proprietaire: '', diagnostiqueur: '', dateVisite: new Date().toISOString().slice(0, 10) },
+    info: { canton: 'GE', volume200: false, adresse: '', rue: '', npa: '', commune: '', egid: '', annee: '', niveaux: '', logements: '', typeDiag: 'Avant travaux', travaux: '', proprietaire: '', diagnostiqueur: '', dateVisite: new Date().toISOString().slice(0, 10) },
     pol: { A: true, PCB: true, Pb: true, HAP: true, HBCD: false },
     cp: {}, locaux: [], samples: [], results: {}, unmatched: [], families: [],
     cfst: { override: '' }, rapport: { conclusion: '', risques: '', relu: false, signe: null },
-    seq: { l: 0, s: 0, f: 0 }, journal: []
+    seq: { l: 0, s: 0, f: 0 }, journal: [], mesures: { zones: [], pcb: [] }
   };
 }
 
-export const adresse = m => [m.info.rue, [m.info.npa, m.info.commune].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+export const adresse = m => m.info.adresse || [m.info.rue, [m.info.npa, m.info.commune].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 export const expert = m => m.info.diagnostiqueur || 'Expert';
 
 export function log(m, cp, cible, txt) {
@@ -89,7 +96,7 @@ export function newSample(m, item, analyses) {
 }
 export function newFamily(m, item) {
   m.seq.f += 1;
-  const f = { id: 'F-' + pad(m.seq.f, 2), key: item.key, nom: item.variante || item.nom, fc: !!(MAT[item.key] || {}).fc, dec: { identite: null, urgence: '', mesure: '', filiere: 'À définir', remarque: '', ok: null } };
+  const f = { id: 'F-' + pad(m.seq.f, 2), key: item.key, nom: item.variante || item.nom, fc: !!(MAT[item.key] || {}).fc, dec: { identite: null, urgence: '', suva: '', mesure: '', filiere: 'À définir', remarque: '', ok: null } };
   m.families.push(f);
   return f;
 }
@@ -138,13 +145,15 @@ export function famInfo(m, f) {
       }
       if (x.it.status === 'pres' && x.it.presPol.includes(p)) pres++;
     }
+    let vmax = null;
+    for (const x of xs) for (const c of x.it.samples) { const r = m.results[c]?.[p]; const v = r && r.v ? parseFloat(String(r.v).replace(/['’\s]/g, '').replace(',', '.')) : NaN; if (!isNaN(v)) vmax = Math.max(vmax ?? v, v); }
     let s;
     if (det) s = 'pos';
     else if (wait) s = 'wait';
     else if (nd) s = f.dec.identite === true ? 'neg' : f.dec.identite === false ? 'pres' : 'conf';
     else if (pres) s = 'pres';
     else s = 'none';
-    st[p] = { s, det, nd, wait, pres, ext: Math.max(0, xs.length - (det + nd)) };
+    st[p] = { s, det, nd, wait, pres, vmax, ext: Math.max(0, xs.length - (det + nd)) };
   }
   const qty = {};
   xs.forEach(x => { const q = parseFloat(String(x.it.qty).replace(',', '.')); if (!isNaN(q)) qty[x.it.unit] = (qty[x.it.unit] || 0) + q; });
@@ -155,7 +164,32 @@ export function famInfo(m, f) {
   return { xs, st, qty, locs, pire, polluee };
 }
 export const STLAB = { pos: 'Présent', neg: 'Absent (analysé)', conf: 'Non détecté, à confirmer', pres: 'Présumé', wait: 'Attente labo', none: '—' };
-export const urgenceProposee = etat => etat === 'Très dégradé' ? 'I' : etat === 'Dégradé' ? 'II' : 'III';
+export const isAmiante = i => !!(i.st.A && (i.st.A.s === 'pos' || i.st.A.s === 'pres'));
+export const suvaPropose = f => ((MAT[f.key] || {}).fa ? 'rouge' : '');
+
+/* Filière proposée selon les teneurs mesurées (l'expert décide) */
+export function filiereProposee(f, i) {
+  const pcb = i.st.PCB, hap = i.st.HAP;
+  if (pcb && pcb.s === 'pos' && pcb.vmax != null && pcb.vmax > SEUILS.pcbDechet) return { f: 'Déchets spéciaux', why: `PCB ${pcb.vmax} mg/kg > ${SEUILS.pcbDechet}` };
+  if (hap && hap.s === 'pos' && hap.vmax != null && hap.vmax > SEUILS.hapSpecial) return { f: 'Déchets spéciaux', why: `HAP ${hap.vmax} mg/kg > ${SEUILS.hapSpecial}` };
+  if (hap && hap.s === 'pos' && hap.vmax != null && hap.vmax > SEUILS.hapControle) return { f: 'Déchets soumis à contrôle', why: `HAP ${hap.vmax} mg/kg entre ${SEUILS.hapControle} et ${SEUILS.hapSpecial}` };
+  if (isAmiante(i) && (MAT[f.key] || {}).fa) return { f: 'Déchets spéciaux', why: 'Amiante faiblement aggloméré' };
+  return null;
+}
+
+/* Plan d'élimination (OLED art. 16) : quantités par filière */
+export function planElimination(m) {
+  const by = {};
+  for (const f of m.families) {
+    const i = famInfo(m, f);
+    if (!i.polluee) continue;
+    const k = f.dec.filiere || 'À définir';
+    by[k] ||= { qty: {}, fams: [] };
+    by[k].fams.push(f.id);
+    for (const [u, q] of Object.entries(i.qty)) by[k].qty[u] = (by[k].qty[u] || 0) + q;
+  }
+  return by;
+}
 
 export function resultsComplete(m) {
   let missing = 0;
@@ -184,7 +218,7 @@ export function conclusionType(m) {
   const lvl = cfstLevel(m);
   if (!lignes.length) return 'Aucun matériau contenant les polluants recherchés n’a été identifié dans le périmètre des travaux. Si des matériaux suspects devaient être découverts pendant les travaux, ils devront être signalés et faire l’objet d’un diagnostic complémentaire avant d’être touchés.';
   return `Les matériaux suivants, présents ou présumés pollués, ont été identifiés dans le périmètre des travaux : ${lignes.join(' ; ')}. ` +
-    (lvl === 3 ? 'Les matériaux amiantés devront être retirés par une entreprise de désamiantage spécialisée reconnue avant le début des travaux. ' : lvl === 2 ? 'Les éléments en fibrociment amianté devront être démontés sans être cassés ni découpés, sans exposer les personnes ni contaminer l’environnement. ' : '') +
+    (lvl === 3 ? 'Les matériaux amiantés devront être retirés avant le début des travaux, conformément à la directive CFST 6503 ; les travaux classés rouge devront être confiés à une entreprise de désamiantage reconnue par la Suva. ' : lvl === 2 ? 'Les éléments en fibrociment amianté devront être démontés sans être cassés ni découpés, sans exposer les personnes ni contaminer l’environnement. ' : '') +
     'Les autres matériaux pollués devront être traités selon les mesures et les filières indiquées dans le tableau de synthèse. Si des matériaux suspects non repérés devaient être découverts pendant les travaux, ceux-ci devront être interrompus localement et le diagnostiqueur consulté.';
 }
 
@@ -213,7 +247,8 @@ export function synthRows(m) {
       rows.push({
         cls: pol ? 'pos' : v.s === 'neg' ? 'neg' : '', fam: f.id, niveaux: niveaux.join(', '), locaux: i.locs.map(l => `${l.nom} (${l.id})`).join(', '),
         element: f.nom, polluant: POL[p].n, statut, qty,
-        urgence: pol ? (f.dec.urgence || '') : '–', mesure: pol ? (f.dec.mesure || '') : 'Aucune', filiere: pol ? (f.dec.filiere || '') : '—'
+        urgence: pol && p === 'A' ? (f.dec.urgence || '') : '–', suva: pol && p === 'A' && f.dec.suva ? SUVA[f.dec.suva].n : '–',
+        mesure: pol ? (f.dec.mesure || '') : 'Aucune', filiere: pol ? (f.dec.filiere || '') : '—'
       });
     }
   }
