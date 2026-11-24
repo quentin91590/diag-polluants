@@ -48,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.3';
+const APP_V = '1.4';
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const had = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
@@ -140,12 +140,11 @@ async function prep(id) {
   const f = (k, lab, type = 'text', extra = '') => `<label class="f"><span>${lab}</span><input class="in" data-f="${k}" type="${type}" value="${esc(I[k])}" ${extra}></label>`;
   view.innerHTML = `
   <section class="card"><h2>Bâtiment</h2>
-    <div class="f"><span>Canton</span>${chips('canton', Object.keys(CANTONS).map(k => CANTONS[k].n), C.n)}</div>
     <label class="f"><span>Adresse</span><input class="in" data-f="adresse" id="adr" type="search" autocomplete="off" placeholder="Tapez l’adresse (ex. Rue de Veyrier 13 Carouge)" value="${esc(I.adresse || S.adresse(m))}"></label>
     <div class="sug" id="sug" hidden></div>
     <div class="grid2">${f('egid', 'EGID', 'text', 'inputmode="numeric"')}${f('annee', 'Année de construction', 'text', 'inputmode="numeric"')}</div>
     <div class="grid2">${f('niveaux', 'Niveaux')}${f('logements', 'Logements', 'text', 'inputmode="numeric"')}</div>
-    ${oblig === null ? '' : `<p class="${oblig ? 'warnbox' : 'note'}">${oblig ? `Diagnostic exigé : construit avant ${C.seuil} (${esc(C.ref)}).` : `Construit en ${esc(I.annee)} ou après ${C.seuil} : diagnostic non exigé par le canton.`}</p>`}
+    ${oblig === null ? '' : `<p class="${oblig ? 'warnbox' : 'note'}">${I.canton !== 'CH' ? `${esc(C.n)} : ` : ''}${oblig ? `diagnostic exigé, construit avant ${C.seuil} (${esc(C.ref)}).` : `construit en ${esc(I.annee)}, après ${C.seuil} : diagnostic non exigé.`}</p>`}
   </section>
   <section class="card"><h2>Mandat</h2>
     <div class="f"><span>Type de diagnostic</span>${chips('type', ['Avant travaux', 'Utilisation normale', 'Après travaux'], I.typeDiag)}</div>
