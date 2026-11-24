@@ -1,7 +1,7 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=111';
-import { put, get, del, photosOf, delPhotosOf } from './db.js?v=111';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=111';
-import * as S from './store.js?v=111';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=112';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=112';
+import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=112';
+import * as S from './store.js?v=112';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -47,7 +47,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.11';
+const APP_V = '1.12';
 const DEMO = 'immeuble-test';
 /* Pas de service worker pour l'instant : on retire ceux des anciennes versions */
 if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
@@ -662,7 +662,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=111'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=112'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },

@@ -1,6 +1,6 @@
-import { get, put, getAll, del, delPhotosOf } from './db.js?v=111';
-import { uid, nowIso, pad } from './util.js?v=111';
-import { MAT, POL, checklistFor, POL_KEYS, SEUILS, SUVA, DIAGNOSTIQUEURS } from './ref.js?v=111';
+import { get, put, getAll, del, delPhotosOf } from './db.js?v=112';
+import { uid, nowIso, pad } from './util.js?v=112';
+import { MAT, POL, checklistFor, POL_KEYS, SEUILS, SUVA, DIAGNOSTIQUEURS } from './ref.js?v=112';
 
 let cur = null;
 

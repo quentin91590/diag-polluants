@@ -1,8 +1,8 @@
 /* Génération du rapport Word (.docx) — structure : directive genevoise et cahier des charges ASCA */
-import { famInfo, synthRows, adresse, cfstLevel, CFST_TXT, STLAB, allItems, expert, planElimination, isAmiante } from './store.js?v=111';
-import { POL, REGLES, MAT, BASES, CANTONS, URGENCE, SUVA, SEUILS } from './ref.js?v=111';
-import { fd, fdt } from './util.js?v=111';
-import { get } from './db.js?v=111';
+import { famInfo, synthRows, adresse, cfstLevel, CFST_TXT, STLAB, allItems, expert, planElimination, isAmiante } from './store.js?v=112';
+import { POL, REGLES, MAT, BASES, CANTONS, URGENCE, SUVA, SEUILS } from './ref.js?v=112';
+import { fd, fdt } from './util.js?v=112';
+import { get } from './db.js?v=112';
 
 function loadDocx() {
   if (window.docx) return Promise.resolve();
