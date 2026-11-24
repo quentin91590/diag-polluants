@@ -1,6 +1,6 @@
-import { get, put, getAll, del, delPhotosOf } from './db.js?v=112';
-import { uid, nowIso, pad } from './util.js?v=112';
-import { MAT, POL, checklistFor, POL_KEYS, SEUILS, SUVA, DIAGNOSTIQUEURS } from './ref.js?v=112';
+import { get, put, getAll, del, delPhotosOf } from './db.js?v=113';
+import { uid, nowIso, pad } from './util.js?v=113';
+import { MAT, POL, checklistFor, POL_KEYS, SEUILS, SUVA, DIAGNOSTIQUEURS } from './ref.js?v=113';
 
 let cur = null;
 
@@ -11,7 +11,7 @@ export async function list() {
 export async function load(id) {
   if (cur && cur.id === id) return cur;
   cur = await get('mandats', id);
-  if (cur) migrate(cur);
+  if (cur) cur = migrate(cur);
   return cur;
 }
 export async function save(m = cur) {
@@ -23,14 +23,18 @@ export async function remove(id) {
   if (cur && cur.id === id) cur = null;
 }
 export function setCurrent(m) { cur = m; }
+const ANCIEN = 'Nans Gallier', NOUVEAU = DIAGNOSTIQUEURS[0];
 function migrate(m) {
+  const j = JSON.stringify(m);
+  if (j.includes(ANCIEN)) m = JSON.parse(j.split(ANCIEN).join(NOUVEAU));
   m.info.canton ||= 'GE';
   if (m.info.volume200 == null) m.info.volume200 = false;
   m.mesures ||= { zones: [], pcb: [] };
   m.families.forEach(f => { if (f.dec.suva == null) f.dec.suva = ''; });
+  return m;
 }
 
-export function lastDiag() { try { return localStorage.getItem('diagpol-diag') || DIAGNOSTIQUEURS[0]; } catch (e) { return DIAGNOSTIQUEURS[0]; } }
+export function lastDiag() { try { const d = localStorage.getItem('diagpol-diag'); return d && d !== ANCIEN ? d : DIAGNOSTIQUEURS[0]; } catch (e) { return DIAGNOSTIQUEURS[0]; } }
 export function setLastDiag(n) { try { localStorage.setItem('diagpol-diag', n); } catch (e) { /* rien */ } }
 export function newMandat() {
   return {

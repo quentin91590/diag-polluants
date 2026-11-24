@@ -79,7 +79,7 @@ export const TYPES = {
 };
 
 /* Diagnostiqueurs proposés (liste à compléter) */
-export const DIAGNOSTIQUEURS = ['Nans Gallier'];
+export const DIAGNOSTIQUEURS = ['Auditeur 1'];
 
 export const NIVEAUX = ['Sous-sol', 'Rez', '1er', '2e', '3e', '4e', '5e', 'Combles', 'Extérieur'];
 export const ZONES = ['Sol', 'Plafond', 'Paroi A', 'Paroi B', 'Paroi C', 'Paroi D', 'Installation', 'Autre'];
