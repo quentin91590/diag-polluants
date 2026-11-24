@@ -50,7 +50,7 @@ const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
-function head(title, sub) { $('#title').textContent = title; $('#subtitle').textContent = sub || ''; document.title = title + ' · Diagnostic polluants'; }
+function head(title, sub) { $('#title').textContent = title; $('#subtitle').textContent = sub || ''; document.title = title === 'Diagnostic polluants' ? title : title + ' · Diagnostic polluants'; }
 function stagger() { $$('#view > *').forEach((e, i) => e.style.setProperty('--i', i)); }
 function bind(acts = {}, fields) {
   view.onclick = e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled && acts[b.dataset.act]) { e.preventDefault(); acts[b.dataset.act](b, e); } };
