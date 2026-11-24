@@ -1,8 +1,8 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=117';
-import { scanQR } from './scan.js?v=117';
-import { put, get, del, photosOf, delPhotosOf } from './db.js?v=117';
-import { checklistFor, POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=117';
-import * as S from './store.js?v=117';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=118';
+import { scanQR } from './scan.js?v=118';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=118';
+import { checklistFor, POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=118';
+import * as S from './store.js?v=118';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.17';
+const APP_V = '1.18';
 const DEMO = 'immeuble-test', DEMO_REV = 2;
 async function loadDemo(stay) {
   const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable');
@@ -73,7 +73,12 @@ function readonly(m) {
 const chips = (name, opts, val, cls = () => '') => `<div class="chips" role="group">${opts.map(o => `<button type="button" class="chip ${cls(o)} ${o === val ? 'on' : ''}" data-act="${name}" data-v="${esc(o)}" aria-pressed="${o === val}">${esc(o)}</button>`).join('')}</div>`;
 const cpBox = (n, title, checks, done, btn) => `<section class="cp"><h3>Point de contrôle ${n} · ${esc(title)}</h3><ul>${checks.map(c => `<li class="${c.ok ? 'ok' : c.block === false ? 'warn' : 'ko'}"><i></i><span>${esc(c.txt)}</span></li>`).join('')}</ul>${done ? stampHtml(done) : btn}</section>`;
 const stampHtml = d => `<div class="stamp"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="15" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M10 17.5l4.5 4.5L24 12.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Validé par ${esc(d.by)} · ${fdt(d.at)}</span></div>`;
-async function mand(id) { const m = await S.load(id); if (!m) { go('#/'); throw new Error('Mandat introuvable'); } return m; }
+async function mand(id, keepFams) {
+  const m = await S.load(id); if (!m) { go('#/'); throw new Error('Mandat introuvable'); }
+  /* Une famille vidée reste proposée sur la fiche matériau ; elle est retirée dès qu'on en sort */
+  if (!keepFams) { const n = m.families.length; S.cleanFamilies(m); if (m.families.length !== n) await save(m); }
+  return m;
+}
 const save = m => S.save(m);
 async function photoUrl(id) {
   if (urls.has(id)) return urls.get(id);
@@ -324,7 +329,7 @@ async function local(id, lid) {
 
 /* ---------- Fiche matériau ---------- */
 async function item(id, lid, iid) {
-  const m = await mand(id); const l = S.findLocal(m, lid); const it = l && l.items.find(i => i.id === iid);
+  const m = await mand(id, true); const l = S.findLocal(m, lid); const it = l && l.items.find(i => i.id === iid);
   if (!it) { go(`#/m/${id}/l/${lid}`); return; }
   const mat = MAT[it.key] || MAT.autre;
   head(it.variante || it.nom, `${l.nom} · ${l.id}`);
@@ -339,7 +344,7 @@ async function item(id, lid, iid) {
   const polsM = POL_KEYS.filter(k => m.pol[k] || it.pols.includes(k));
   const base = checklistFor(l.type, m.info.annee, m.pol);
   const deletable = it.added || !base.includes(it.key) || l.items.findIndex(i => i.key === it.key) !== l.items.indexOf(it);
-  const fams = m.families.filter(f => f.id !== '').sort((a, b) => (b.key === it.key) - (a.key === it.key));
+  const fams = m.families.filter(f => f.key === it.key || f.id === it.fam);
   const sampleTags = it.samples.map(c => { const s = m.samples.find(s => s.code === c); return `<div class="tagl"><div><b>${c}</b><span>${l.id} · ${esc(it.zone || '—')}</span><span>${s ? s.analyses.map(p => POL[p].n).join(', ') : ''} · ${fd(s?.at)}</span></div><div class="qr">${qrSvg(qrUrl(m, c))}</div></div>`; }).join('');
   view.innerHTML = `
   <div class="hero"><p class="kick">${esc(l.nom)} · ${l.id}</p><h1>${esc(it.nom)}</h1><p>${it.pols.map(p => `<i class="pol">${POL[p].n}</i>`).join('')}</p>${mat.hint ? `<p class="note">${esc(mat.hint)}</p>` : ''}</div>
@@ -355,7 +360,7 @@ async function item(id, lid, iid) {
     ${it.status === 'pres' ? `<div class="f"><span>Polluants présumés</span>${polsM.map(p => `<label class="check"><input type="checkbox" data-f="pp:${p}" ${it.presPol.includes(p) ? 'checked' : ''}><span>${POL[p].n}</span></label>`).join('')}</div>` : ''}
     ${it.status === 'nonsusp' ? `<label class="f"><span>Justification</span><textarea class="in" data-f="justif" rows="2" placeholder="Ex. joints refaits en 2015 (facture)">${esc(it.justif)}</textarea></label>` : ''}
     ${it.status === 'abs' ? `<p class="small muted">Vérifié, absent du local.</p>` : ''}
-    ${it.status === 'prel' || it.status === 'pres' ? `<label class="f"><span>Famille (matériau identique)</span><select class="in" data-f="fam"><option value="">Choisir…</option>${fams.map(f => `<option value="${f.id}" ${f.id === it.fam ? 'selected' : ''}>${f.id} · ${esc(f.nom)}</option>`).join('')}<option value="+">Nouvelle famille</option></select></label>` : ''}
+    ${it.status === 'prel' || it.status === 'pres' ? `<label class="f"><span>Famille (matériau identique)</span><select class="in" data-f="fam">${it.fam ? '' : '<option value="">Choisir…</option>'}${fams.map(f => { const n = S.itemsOfFam(m, f.id).length; return `<option value="${f.id}" ${f.id === it.fam ? 'selected' : ''}>${f.id} · ${esc(f.nom)} · ${n ? `${n} matériau${n > 1 ? 'x' : ''}` : 'vide'}</option>`; }).join('')}<option value="+">+ Nouvelle famille</option></select></label>` : ''}
   </section>
   <section class="card"><h3>Note</h3><textarea class="in" data-f="note" rows="2">${esc(it.note)}</textarea></section>
   ${deletable ? `<button class="btn sm danger" data-act="deli" type="button">Supprimer le matériau</button>` : ''}
@@ -384,7 +389,7 @@ async function item(id, lid, iid) {
       it.status = v;
       if (v === 'pres' && !it.presPol.length) it.presPol = [...it.pols];
       if (v === 'prel' || v === 'pres') { if (!it.fam) { const same = m.families.find(f => f.key === it.key && (f.nom === (it.variante || it.nom))); it.fam = same ? same.id : S.newFamily(m, it).id; } }
-      else { it.fam = ''; S.cleanFamilies(m); }
+      else { it.fam = ''; }
       buzz(); changed('décision modifiée'); await save(m); refresh();
     },
     sample: async () => {
@@ -405,7 +410,7 @@ async function item(id, lid, iid) {
     if (k.startsWith('pp:')) { const p = k.slice(3); it.presPol = el.checked ? [...new Set([...it.presPol, p])] : it.presPol.filter(x => x !== p); changed('présomption modifiée'); await save(m); return; }
     if (k === 'fam') {
       if (el.value === '+') { it.fam = S.newFamily(m, it).id; } else it.fam = el.value;
-      S.cleanFamilies(m); changed('famille modifiée'); await save(m); refresh(); return;
+      changed('famille modifiée'); await save(m); refresh(); return;
     }
     if (k === 'unit') { it.unit = el.value; light('unité modifiée'); await save(m); return; }
     it[k] = el.value;
@@ -731,7 +736,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=117'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=118'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },
