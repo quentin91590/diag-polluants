@@ -1,8 +1,8 @@
-import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=116';
-import { scanQR } from './scan.js?v=116';
-import { put, get, del, photosOf, delPhotosOf } from './db.js?v=116';
-import { POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=116';
-import * as S from './store.js?v=116';
+import { $, $$, esc, fd, fdt, nf, parseNum, download, toast, buzz, sheet, confirmSheet, ripple, shrink, blobToB64, b64ToBlob, qrSvg, uid, nowIso } from './util.js?v=117';
+import { scanQR } from './scan.js?v=117';
+import { put, get, del, photosOf, delPhotosOf } from './db.js?v=117';
+import { checklistFor, POL, POL_KEYS, MAT, TYPES, NIVEAUX, ZONES, ETATS, UNITES, DECISIONS, REGLES, polluantsProposes, CANTONS, URGENCE, SUVA, SEUILS, BASES, DIAGNOSTIQUEURS } from './ref.js?v=117';
+import * as S from './store.js?v=117';
 
 const view = $('#view');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,7 +48,7 @@ $('#back').onclick = () => go(parent(location.hash));
 document.addEventListener('pointerdown', ripple);
 const net = () => { $('#net').hidden = navigator.onLine; };
 addEventListener('online', net); addEventListener('offline', net); net();
-const APP_V = '1.16';
+const APP_V = '1.17';
 const DEMO = 'immeuble-test', DEMO_REV = 2;
 async function loadDemo(stay) {
   const r = await fetch(`demo/immeuble-test.json?v=${APP_V}`); if (!r.ok) throw new Error('Immeuble test introuvable');
@@ -309,7 +309,7 @@ async function local(id, lid) {
     addm: async () => {
       const v = await sheet(`<h2>Ajouter un matériau</h2><div class="list">${Object.entries(MAT).map(([k, x]) => `<button class="li" data-close="${k}" type="button"><div class="tx"><b>${esc(x.n)}</b><span>${x.p.map(p => POL[p].n).join(', ')}</span></div></button>`).join('')}</div><button class="btn" data-close="" type="button">Annuler</button>`);
       if (!v) return;
-      const it = S.newItem(m, v); l.items.push(it); touchLocal(m, l, 'matériau ajouté'); await save(m); go(`#/m/${id}/l/${lid}/i/${it.id}`);
+      const it = S.newItem(m, v); it.added = true; l.items.push(it); touchLocal(m, l, 'matériau ajouté'); await save(m); go(`#/m/${id}/l/${lid}/i/${it.id}`);
     },
     dell: async () => {
       if (!await confirmSheet('Supprimer ce local ?', `${l.nom} et ses ${l.items.length} points.`, 'Supprimer', true)) return;
@@ -337,6 +337,8 @@ async function item(id, lid, iid) {
     return h + `<div class="ph" data-act="shot" data-k="autre">+ Photo</div>`;
   };
   const polsM = POL_KEYS.filter(k => m.pol[k] || it.pols.includes(k));
+  const base = checklistFor(l.type, m.info.annee, m.pol);
+  const deletable = it.added || !base.includes(it.key) || l.items.findIndex(i => i.key === it.key) !== l.items.indexOf(it);
   const fams = m.families.filter(f => f.id !== '').sort((a, b) => (b.key === it.key) - (a.key === it.key));
   const sampleTags = it.samples.map(c => { const s = m.samples.find(s => s.code === c); return `<div class="tagl"><div><b>${c}</b><span>${l.id} · ${esc(it.zone || '—')}</span><span>${s ? s.analyses.map(p => POL[p].n).join(', ') : ''} · ${fd(s?.at)}</span></div><div class="qr">${qrSvg(qrUrl(m, c))}</div></div>`; }).join('');
   view.innerHTML = `
@@ -356,6 +358,7 @@ async function item(id, lid, iid) {
     ${it.status === 'prel' || it.status === 'pres' ? `<label class="f"><span>Famille (matériau identique)</span><select class="in" data-f="fam"><option value="">Choisir…</option>${fams.map(f => `<option value="${f.id}" ${f.id === it.fam ? 'selected' : ''}>${f.id} · ${esc(f.nom)}</option>`).join('')}<option value="+">Nouvelle famille</option></select></label>` : ''}
   </section>
   <section class="card"><h3>Note</h3><textarea class="in" data-f="note" rows="2">${esc(it.note)}</textarea></section>
+  ${deletable ? `<button class="btn sm danger" data-act="deli" type="button">Supprimer le matériau</button>` : ''}
   <div class="actions"><a class="btn" href="#/m/${id}/l/${lid}">Local</a><button class="btn pri" data-act="next" data-keep type="button">Suivant</button></div>`;
   stagger(); readonly(m);
   let shotKind = 'large';
@@ -388,6 +391,13 @@ async function item(id, lid, iid) {
       const an = it.pols.filter(p => polsM.includes(p));
       if (!an.length) { toast('Choisissez une analyse'); return; }
       const c = S.newSample(m, it, an); buzz(30); changed('prélèvement créé'); await save(m); refresh();
+    },
+    deli: async () => {
+      if (!await confirmSheet('Supprimer ce matériau ?', `${it.variante || it.nom}${it.samples.length ? `, son prélèvement ${it.samples.join(', ')}` : ''} et ses photos.`, 'Supprimer', true)) return;
+      for (const p of it.photos) await del('photos', p.id);
+      m.samples = m.samples.filter(x => !it.samples.includes(x.code)); it.samples.forEach(c => delete m.results[c]);
+      l.items = l.items.filter(x => x !== it); S.cleanFamilies(m); touchLocal(m, l, 'matériau supprimé');
+      buzz(20); await save(m); go(`#/m/${id}/l/${lid}`);
     },
     next: () => { const n = l.items.find(i => i.status === 'todo' && i !== it); go(n ? `#/m/${id}/l/${lid}/i/${n.id}` : `#/m/${id}/l/${lid}`); }
   }, async (k, el, ev) => {
@@ -721,7 +731,7 @@ async function rapport(id) {
     type: async () => { m.rapport.conclusion = S.conclusionType(m); await save(m); refresh(); },
     word: async b => {
       b.disabled = true; b.textContent = 'Génération…';
-      try { const { buildDocx } = await import('./report.js?v=116'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
+      try { const { buildDocx } = await import('./report.js?v=117'); const blob = await buildDocx(m); download(blob, `Diagnostic_${(S.adresse(m) || 'mandat').replace(/[^\w-]+/g, '_')}_V${m.version}.docx`); }
       catch (e) { console.error(e); toast('Erreur : ' + e.message); }
       b.disabled = false; b.textContent = 'Générer le Word';
     },

@@ -1,13 +1,13 @@
 /* Génération du rapport Word (.docx) — structure : directive genevoise et cahier des charges ASCA */
-import { famInfo, synthRows, adresse, cfstLevel, CFST_TXT, STLAB, allItems, expert, planElimination, isAmiante } from './store.js?v=116';
-import { POL, REGLES, MAT, BASES, CANTONS, URGENCE, SUVA, SEUILS } from './ref.js?v=116';
-import { fd, fdt } from './util.js?v=116';
-import { get } from './db.js?v=116';
+import { famInfo, synthRows, adresse, cfstLevel, CFST_TXT, STLAB, allItems, expert, planElimination, isAmiante } from './store.js?v=117';
+import { POL, REGLES, MAT, BASES, CANTONS, URGENCE, SUVA, SEUILS } from './ref.js?v=117';
+import { fd, fdt } from './util.js?v=117';
+import { get } from './db.js?v=117';
 
 function loadDocx() {
   if (window.docx) return Promise.resolve();
   return new Promise((ok, ko) => {
-    const s = document.createElement('script'); s.src = 'js/vendor/docx.iife.js?v=116';
+    const s = document.createElement('script'); s.src = 'js/vendor/docx.iife.js?v=117';
     s.onload = () => ok(); s.onerror = () => ko(new Error('Bibliothèque Word introuvable'));
     document.head.appendChild(s);
   });
